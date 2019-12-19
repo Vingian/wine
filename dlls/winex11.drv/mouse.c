@@ -30,8 +30,18 @@
 #include <X11/Xlib.h>
 #include <X11/cursorfont.h>
 #include <stdarg.h>
-#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+
+/* we need both XInput.h and XInput2.h or neither */
+#if defined(HAVE_X11_EXTENSIONS_XINPUT2_H) && defined(HAVE_X11_EXTENSIONS_XINPUT_H)
+#include <X11/extensions/XInput.h>
 #include <X11/extensions/XInput2.h>
+#else
+#ifdef HAVE_X11_EXTENSIONS_XINPUT_H
+#undef HAVE_X11_EXTENSIONS_XINPUT_H
+#endif
+#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+#undef HAVE_X11_EXTENSIONS_XINPUT2_H
+#endif
 #endif
 
 #ifdef SONAME_LIBXCURSOR
@@ -133,6 +143,9 @@ MAKE_FUNCPTR(XIFreeDeviceInfo);
 MAKE_FUNCPTR(XIQueryDevice);
 MAKE_FUNCPTR(XIQueryVersion);
 MAKE_FUNCPTR(XISelectEvents);
+MAKE_FUNCPTR(XOpenDevice);
+MAKE_FUNCPTR(XCloseDevice);
+MAKE_FUNCPTR(XGetDeviceButtonMapping);
 #undef MAKE_FUNCPTR
 #endif
 
@@ -223,6 +236,60 @@ static void set_window_cursor( Window window, HCURSOR handle )
 }
 
 #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+
+struct mouse_button_mapping
+{
+    int deviceid;
+    unsigned int button_count;
+    unsigned char buttons[256];
+};
+
+static struct mouse_button_mapping *pointer_mapping;
+static struct mouse_button_mapping *device_mapping;
+
+void x11drv_init_mouse( Display *display )
+{
+    struct mouse_button_mapping *tmp;
+
+    if (!(tmp = malloc( sizeof(*tmp) )))
+    {
+        WARN("Unable to allocate device mapping.\n");
+        return;
+    }
+
+    tmp->button_count = ARRAY_SIZE( tmp->buttons );
+    tmp->button_count = XGetPointerMapping( display, tmp->buttons, tmp->button_count );
+
+    free( InterlockedExchangePointer( (void**)&pointer_mapping, tmp ) );
+}
+
+static void update_device_mapping( Display *display, int deviceid )
+{
+    struct mouse_button_mapping *tmp;
+    XDevice *device;
+
+    if (!deviceid || !(device = pXOpenDevice( display, deviceid )))
+    {
+        WARN( "Unable to open cursor device %d\n", deviceid );
+        return;
+    }
+
+    if (!(tmp = malloc( sizeof(*tmp) )))
+    {
+        WARN( "Unable to allocate device mapping.\n" );
+        pXCloseDevice( display, device );
+        return;
+    }
+
+    tmp->deviceid = deviceid;
+    tmp->button_count = ARRAY_SIZE( tmp->buttons );
+    tmp->button_count = pXGetDeviceButtonMapping( display, device, tmp->buttons, tmp->button_count );
+
+    free( InterlockedExchangePointer( (void**)&device_mapping, tmp ) );
+
+    pXCloseDevice( display, device );
+}
+
 /***********************************************************************
  *              update_relative_valuators
  */
@@ -347,6 +414,10 @@ void x11drv_xinput2_init( struct x11drv_thread_data *data )
 }
 
 #else /* HAVE_X11_EXTENSIONS_XINPUT2_H */
+
+void x11drv_init_mouse( Display *display )
+{
+}
 
 void x11drv_xinput2_enable( Display *display, Window window )
 {
@@ -1587,7 +1658,11 @@ static BOOL X11DRV_DeviceChanged( XGenericEventCookie *xev )
     struct x11drv_thread_data *data = x11drv_thread_data();
 
     if (event->deviceid != data->xinput2_pointer) return FALSE;
+    if (event->reason != XISlaveSwitch) return FALSE;
+
     update_relative_valuators( event->classes, event->num_classes );
+    update_device_mapping( event->display, event->sourceid );
+
     return TRUE;
 }
 
@@ -1744,6 +1819,9 @@ void x11drv_xinput2_load(void)
     LOAD_FUNCPTR(XIQueryDevice);
     LOAD_FUNCPTR(XIQueryVersion);
     LOAD_FUNCPTR(XISelectEvents);
+    LOAD_FUNCPTR(XOpenDevice);
+    LOAD_FUNCPTR(XCloseDevice);
+    LOAD_FUNCPTR(XGetDeviceButtonMapping);
 #undef LOAD_FUNCPTR
 
     xinput2_available = XQueryExtension( gdi_display, "XInputExtension", &xinput2_opcode, &event, &error );
