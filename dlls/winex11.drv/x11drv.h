@@ -431,8 +431,8 @@ struct x11drv_thread_data
     double              raw_x;
     double              raw_y;
     int      xinput2_pointer;      /* XInput2 master pointer device id */
-    int      root_window_users;    /* counter for root window XISelectEvents */
 #endif /* HAVE_X11_EXTENSIONS_XINPUT2_H */
+    int      root_window_users;    /* counter for root window XISelectEvents */
 
     struct display_state desired_state;       /* display state tracking the desired / win32 state */
     struct display_state pending_state;       /* display state tracking the pending / requested state */

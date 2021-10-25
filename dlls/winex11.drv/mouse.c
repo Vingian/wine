@@ -339,7 +339,8 @@ void x11drv_xinput2_enable( Display *display, Window window )
         if (x11drv_thread_data()->root_window_users++) return;
         XISetMask( mask_bits, XI_DeviceChanged );
         XISetMask( mask_bits, XI_RawMotion );
-        XISetMask( mask_bits, XI_ButtonPress );
+        XISetMask( mask_bits, XI_RawButtonPress );
+        XISetMask( mask_bits, XI_RawButtonRelease );
     }
     else
     {
@@ -1561,6 +1562,7 @@ BOOL X11DRV_ButtonPress( HWND hwnd, XEvent *xev )
     POINT pt = { event->x, event->y }, root = { event->x_root, event->y_root };
     struct x11drv_win_data *data;
 
+    if (x11drv_thread_data()->root_window_users) return FALSE;
     if (button >= NB_BUTTONS) return FALSE;
     flags = button_down_flags[button];
 
@@ -1587,6 +1589,7 @@ BOOL X11DRV_ButtonRelease( HWND hwnd, XEvent *xev )
     UINT button = event->button - 1, flags, time = EVENT_x11_time_to_win32_time( event->time );
     POINT pt = { event->x, event->y }, root = { event->x_root, event->y_root };
 
+    if (x11drv_thread_data()->root_window_users) return FALSE;
     if (button >= NB_BUTTONS || !(flags = button_up_flags[button])) return FALSE;
 
     TRACE( "hwnd %p/%lx button %u pos %s\n", hwnd, event->window, button, wine_dbgstr_point( &pt ) );
@@ -1753,6 +1756,44 @@ static BOOL X11DRV_RawMotion( XGenericEventCookie *xev )
     return TRUE;
 }
 
+/***********************************************************************
+ *           X11DRV_RawButtonEvent
+ */
+static BOOL X11DRV_RawButtonEvent( XGenericEventCookie *cookie )
+{
+    XIRawEvent *event = cookie->data;
+    struct x11drv_thread_data *thread_data = x11drv_thread_data();
+    UINT data, flags, time = EVENT_x11_time_to_win32_time( event->time );
+    struct raw_mouse raw = { .count = 1 };
+    int button = event->detail - 1;
+    POINT pt;
+
+    if (!device_mapping || device_mapping->deviceid != event->sourceid)
+        update_device_mapping( event->display, event->sourceid );
+    if (event->deviceid != thread_data->xinput2_pointer) return FALSE;
+
+    if (button >= 0 && device_mapping)  button = device_mapping->buttons[button] - 1;
+    if (button >= 0 && pointer_mapping) button = pointer_mapping->buttons[button] - 1;
+    if (button < 0 || button >= NB_BUTTONS) return FALSE;
+
+    if (event->evtype == XI_RawButtonRelease)
+    {
+        TRACE( "raw button %u (raw: %u) up\n", button, event->detail );
+        data = button_up_data[button];
+        flags = button_up_flags[button];
+    }
+    else
+    {
+        TRACE( "raw button %u (raw: %u) down\n", button, event->detail );
+        data = button_down_data[button];
+        flags = button_down_flags[button];
+    }
+
+    pt = map_raw_event_coords( event, raw.data );
+    send_mouse_input( NULL, pt, flags, data, time, &raw );
+    return TRUE;
+}
+
 static BOOL X11DRV_TouchEvent( HWND hwnd, XGenericEventCookie *xev )
 {
     RECT virtual = NtUserGetVirtualScreenRect( MDT_RAW_DPI );
@@ -1857,7 +1898,10 @@ BOOL X11DRV_GenericEvent( HWND hwnd, XEvent *xev )
     case XI_RawMotion:
         ret = X11DRV_RawMotion( event );
         break;
-
+    case XI_RawButtonPress:
+    case XI_RawButtonRelease:
+        ret = X11DRV_RawButtonEvent( event );
+        break;
     case XI_TouchBegin:
     case XI_TouchUpdate:
     case XI_TouchEnd:
