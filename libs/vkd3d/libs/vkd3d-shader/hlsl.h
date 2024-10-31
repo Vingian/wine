@@ -22,7 +22,6 @@
 
 #include "vkd3d_shader_private.h"
 #include "wine/rbtree.h"
-#include "d3dcommon.h"
 #include "d3dx9shader.h"
 
 /* The general IR structure is inspired by Mesa GLSL hir, even though the code
@@ -70,6 +69,14 @@ static inline unsigned int hlsl_swizzle_get_component(uint32_t swizzle, unsigned
     return (swizzle >> HLSL_SWIZZLE_SHIFT(idx)) & HLSL_SWIZZLE_MASK;
 }
 
+static inline uint32_t vsir_swizzle_from_hlsl(uint32_t swizzle)
+{
+    return vkd3d_shader_create_swizzle(hlsl_swizzle_get_component(swizzle, 0),
+            hlsl_swizzle_get_component(swizzle, 1),
+            hlsl_swizzle_get_component(swizzle, 2),
+            hlsl_swizzle_get_component(swizzle, 3));
+}
+
 enum hlsl_type_class
 {
     HLSL_CLASS_SCALAR,
@@ -99,6 +106,7 @@ enum hlsl_type_class
     HLSL_CLASS_BLEND_STATE,
     HLSL_CLASS_VOID,
     HLSL_CLASS_NULL,
+    HLSL_CLASS_ERROR,
 };
 
 enum hlsl_base_type
@@ -316,6 +324,9 @@ enum hlsl_ir_node_type
     HLSL_IR_STORE,
     HLSL_IR_SWIZZLE,
     HLSL_IR_SWITCH,
+
+    HLSL_IR_COMPILE,
+    HLSL_IR_SAMPLER_STATE,
     HLSL_IR_STATEBLOCK_CONSTANT,
 };
 
@@ -352,6 +363,9 @@ struct hlsl_block
 {
     /* List containing instruction nodes; linked by the hlsl_ir_node.entry fields. */
     struct list instrs;
+    /* Instruction representing the "value" of this block, if applicable.
+     * This may point to an instruction outside of this block! */
+    struct hlsl_ir_node *value;
 };
 
 /* A reference to an instruction node (struct hlsl_ir_node), usable as a field in other structs.
@@ -474,6 +488,8 @@ struct hlsl_ir_var
      *   range). The IR instructions are numerated starting from 2, because 0 means unused, and 1
      *   means function entry. */
     unsigned int first_write, last_read;
+    /* Whether the variable is read in any entry function. */
+    bool is_read;
     /* Offset where the variable's value is stored within its buffer in numeric register components.
      * This in case the variable is uniform. */
     unsigned int buffer_offset;
@@ -591,10 +607,18 @@ struct hlsl_ir_function_decl
     unsigned int attr_count;
     const struct hlsl_attribute *const *attrs;
 
+    bool early_depth_test;
+
     /* Synthetic boolean variable marking whether a return statement has been
      * executed. Needed to deal with return statements in non-uniform control
      * flow, since some backends can't handle them. */
     struct hlsl_ir_var *early_return_var;
+
+    /* List of all the extern semantic variables; linked by the
+     * hlsl_ir_var.extern_entry fields. This exists as a convenience because
+     * it is often necessary to iterate all extern variables and these can be
+     * declared in as function parameters, or as the function return value. */
+    struct list extern_vars;
 };
 
 struct hlsl_ir_call
@@ -646,6 +670,7 @@ struct hlsl_ir_switch
 
 enum hlsl_ir_expr_op
 {
+    HLSL_OP0_ERROR,
     HLSL_OP0_VOID,
     HLSL_OP0_RASTERIZER_SAMPLE_COUNT,
 
@@ -703,7 +728,7 @@ enum hlsl_ir_expr_op
     HLSL_OP2_SLT,
 
     /* DP2ADD(a, b, c) computes the scalar product of a.xy and b.xy,
-     * then adds c. */
+     * then adds c, where c must have dimx=1. */
     HLSL_OP3_DP2ADD,
     /* TERNARY(a, b, c) returns 'b' if 'a' is true and 'c' otherwise. 'a' must always be boolean.
      * CMP(a, b, c) returns 'b' if 'a' >= 0, and 'c' otherwise. It's used only for SM1-SM3 targets. */
@@ -854,6 +879,43 @@ struct hlsl_ir_string_constant
     char *string;
 };
 
+/* Represents shader compilation call for effects, such as "CompileShader()".
+ *
+ * Unlike hlsl_ir_call, it is not flattened, thus, it keeps track of its
+ * arguments and maintains its own instruction block. */
+struct hlsl_ir_compile
+{
+    struct hlsl_ir_node node;
+
+    enum hlsl_compile_type
+    {
+        /* A shader compilation through the CompileShader() function or the "compile" syntax. */
+        HLSL_COMPILE_TYPE_COMPILE,
+        /* A call to ConstructGSWithSO(), which receives a geometry shader and retrieves one as well. */
+        HLSL_COMPILE_TYPE_CONSTRUCTGSWITHSO,
+    } compile_type;
+
+    /* Special field to store the profile argument for HLSL_COMPILE_TYPE_COMPILE. */
+    const struct hlsl_profile_info *profile;
+
+    /* Block containing the instructions required by the arguments of the
+     * compilation call. */
+    struct hlsl_block instrs;
+
+    /* Arguments to the compilation call. For HLSL_COMPILE_TYPE_COMPILE
+     * args[0] is an hlsl_ir_call to the specified function. */
+    struct hlsl_src *args;
+    unsigned int args_count;
+};
+
+/* Represents a state block initialized with the "sampler_state" keyword. */
+struct hlsl_ir_sampler_state
+{
+    struct hlsl_ir_node node;
+
+    struct hlsl_state_block *state_block;
+};
+
 /* Stateblock constants are undeclared values found on state blocks or technique passes descriptions,
  *   that do not concern regular pixel, vertex, or compute shaders, except for parsing. */
 struct hlsl_ir_stateblock_constant
@@ -965,10 +1027,11 @@ struct hlsl_ctx
     struct hlsl_scope *dummy_scope;
     /* List of all the scopes in the program; linked by the hlsl_scope.entry fields. */
     struct list scopes;
-    /* List of all the extern variables; linked by the hlsl_ir_var.extern_entry fields.
-     * This exists as a convenience because it is often necessary to iterate all extern variables
-     *   and these can be declared in global scope, as function parameters, or as the function
-     *   return value. */
+
+    /* List of all the extern variables, excluding semantic variables; linked
+     * by the hlsl_ir_var.extern_entry fields. This exists as a convenience
+     * because it is often necessary to iterate all extern variables declared
+     * in the global scope or as function parameters. */
     struct list extern_vars;
 
     /* List containing both the built-in HLSL buffers ($Globals and $Params) and the ones declared
@@ -1003,7 +1066,11 @@ struct hlsl_ctx
         struct hlsl_type *string;
         struct hlsl_type *Void;
         struct hlsl_type *null;
+        struct hlsl_type *error;
     } builtin_types;
+
+    /* Pre-allocated "error" expression. */
+    struct hlsl_ir_node *error_instr;
 
     /* List of the instruction nodes for initializing static variables. */
     struct hlsl_block static_initializers;
@@ -1016,18 +1083,22 @@ struct hlsl_ctx
         {
             uint32_t index;
             struct hlsl_vec4 value;
+            struct vkd3d_shader_location loc;
         } *regs;
         size_t count, size;
     } constant_defs;
     /* 'c' registers where the constants expected by SM2 sincos are stored. */
     struct hlsl_reg d3dsincosconst1, d3dsincosconst2;
-    /* Number of temp. registers required for the shader to run, i.e. the largest temp register
-     *   index that will be used in the output bytecode (+1). */
-    uint32_t temp_count;
 
     /* Number of threads to be executed (on the X, Y, and Z dimensions) in a single thread group in
      *   compute shader profiles. It is set using the numthreads() attribute in the entry point. */
     uint32_t thread_count[3];
+
+    enum vkd3d_tessellator_domain domain;
+    unsigned int output_control_point_count;
+    enum vkd3d_shader_tessellator_output_primitive output_primitive;
+    enum vkd3d_shader_tessellator_partitioning partitioning;
+    struct hlsl_ir_function_decl *patch_constant_func;
 
     /* In some cases we generate opcodes by parsing an HLSL function and then
      * invoking it. If not NULL, this field is the name of the function that we
@@ -1044,6 +1115,7 @@ struct hlsl_ctx
     bool child_effect;
     bool include_empty_buffers;
     bool warn_implicit_truncation;
+    bool double_as_float_alias;
 };
 
 static inline bool hlsl_version_ge(const struct hlsl_ctx *ctx, unsigned int major, unsigned int minor)
@@ -1149,6 +1221,18 @@ static inline struct hlsl_ir_switch *hlsl_ir_switch(const struct hlsl_ir_node *n
     return CONTAINING_RECORD(node, struct hlsl_ir_switch, node);
 }
 
+static inline struct hlsl_ir_compile *hlsl_ir_compile(const struct hlsl_ir_node *node)
+{
+    VKD3D_ASSERT(node->type == HLSL_IR_COMPILE);
+    return CONTAINING_RECORD(node, struct hlsl_ir_compile, node);
+}
+
+static inline struct hlsl_ir_sampler_state *hlsl_ir_sampler_state(const struct hlsl_ir_node *node)
+{
+    VKD3D_ASSERT(node->type == HLSL_IR_SAMPLER_STATE);
+    return CONTAINING_RECORD(node, struct hlsl_ir_sampler_state, node);
+};
+
 static inline struct hlsl_ir_stateblock_constant *hlsl_ir_stateblock_constant(const struct hlsl_ir_node *node)
 {
     VKD3D_ASSERT(node->type == HLSL_IR_STATEBLOCK_CONSTANT);
@@ -1158,16 +1242,19 @@ static inline struct hlsl_ir_stateblock_constant *hlsl_ir_stateblock_constant(co
 static inline void hlsl_block_init(struct hlsl_block *block)
 {
     list_init(&block->instrs);
+    block->value = NULL;
 }
 
 static inline void hlsl_block_add_instr(struct hlsl_block *block, struct hlsl_ir_node *instr)
 {
     list_add_tail(&block->instrs, &instr->entry);
+    block->value = (instr->data_type ? instr : NULL);
 }
 
 static inline void hlsl_block_add_block(struct hlsl_block *block, struct hlsl_block *add)
 {
     list_move_tail(&block->instrs, &add->instrs);
+    block->value = add->value;
 }
 
 static inline void hlsl_src_from_node(struct hlsl_src *src, struct hlsl_ir_node *node)
@@ -1330,13 +1417,19 @@ bool hlsl_clone_block(struct hlsl_ctx *ctx, struct hlsl_block *dst_block, const 
 void hlsl_dump_function(struct hlsl_ctx *ctx, const struct hlsl_ir_function_decl *func);
 void hlsl_dump_var_default_values(const struct hlsl_ir_var *var);
 
+bool hlsl_state_block_add_entry(struct hlsl_state_block *state_block,
+        struct hlsl_state_block_entry *entry);
 bool hlsl_validate_state_block_entry(struct hlsl_ctx *ctx, struct hlsl_state_block_entry *entry,
         const struct vkd3d_shader_location *loc);
 struct hlsl_state_block_entry *clone_stateblock_entry(struct hlsl_ctx *ctx,
-        struct hlsl_state_block_entry *src, const char *name, bool lhs_has_index,
-        unsigned int lhs_index, unsigned int arg_index);
+        const struct hlsl_state_block_entry *src, const char *name, bool lhs_has_index,
+        unsigned int lhs_index, bool single_arg, unsigned int arg_index);
 
+void hlsl_lower_index_loads(struct hlsl_ctx *ctx, struct hlsl_block *body);
 void hlsl_run_const_passes(struct hlsl_ctx *ctx, struct hlsl_block *body);
+uint32_t allocate_temp_registers(struct hlsl_ctx *ctx, struct hlsl_ir_function_decl *entry_func);
+void mark_indexable_vars(struct hlsl_ctx *ctx, struct hlsl_ir_function_decl *entry_func);
+void compute_liveness(struct hlsl_ctx *ctx, struct hlsl_ir_function_decl *entry_func);
 int hlsl_emit_bytecode(struct hlsl_ctx *ctx, struct hlsl_ir_function_decl *entry_func,
         enum vkd3d_shader_target_type target_type, struct vkd3d_shader_code *out);
 int hlsl_emit_effect_binary(struct hlsl_ctx *ctx, struct vkd3d_shader_code *out);
@@ -1428,6 +1521,9 @@ bool hlsl_index_is_noncontiguous(struct hlsl_ir_index *index);
 bool hlsl_index_is_resource_access(struct hlsl_ir_index *index);
 bool hlsl_index_chain_has_resource_access(struct hlsl_ir_index *index);
 
+struct hlsl_ir_node *hlsl_new_compile(struct hlsl_ctx *ctx, enum hlsl_compile_type compile_type,
+        const char *profile_name, struct hlsl_ir_node **args, unsigned int args_count,
+        struct hlsl_block *args_instrs, const struct vkd3d_shader_location *loc);
 struct hlsl_ir_node *hlsl_new_index(struct hlsl_ctx *ctx, struct hlsl_ir_node *val,
         struct hlsl_ir_node *idx, const struct vkd3d_shader_location *loc);
 struct hlsl_ir_node *hlsl_new_loop(struct hlsl_ctx *ctx,
@@ -1440,6 +1536,8 @@ struct hlsl_type *hlsl_new_struct_type(struct hlsl_ctx *ctx, const char *name,
         struct hlsl_struct_field *fields, size_t field_count);
 struct hlsl_ir_node *hlsl_new_swizzle(struct hlsl_ctx *ctx, uint32_t s, unsigned int components,
         struct hlsl_ir_node *val, const struct vkd3d_shader_location *loc);
+struct hlsl_ir_node *hlsl_new_sampler_state(struct hlsl_ctx *ctx,
+        const struct hlsl_state_block *state_block, struct vkd3d_shader_location *loc);
 struct hlsl_ir_node *hlsl_new_stateblock_constant(struct hlsl_ctx *ctx, const char *name,
         struct vkd3d_shader_location *loc);
 struct hlsl_ir_node *hlsl_new_string_constant(struct hlsl_ctx *ctx, const char *str,
@@ -1493,6 +1591,7 @@ unsigned int hlsl_type_minor_size(const struct hlsl_type *type);
 unsigned int hlsl_type_major_size(const struct hlsl_type *type);
 unsigned int hlsl_type_element_count(const struct hlsl_type *type);
 bool hlsl_type_is_resource(const struct hlsl_type *type);
+bool hlsl_type_is_shader(const struct hlsl_type *type);
 unsigned int hlsl_type_get_sm4_offset(const struct hlsl_type *type, unsigned int offset);
 bool hlsl_types_are_equal(const struct hlsl_type *t1, const struct hlsl_type *t2);
 
@@ -1525,22 +1624,15 @@ bool hlsl_transform_ir(struct hlsl_ctx *ctx, bool (*func)(struct hlsl_ctx *ctx, 
 
 D3DXPARAMETER_CLASS hlsl_sm1_class(const struct hlsl_type *type);
 D3DXPARAMETER_TYPE hlsl_sm1_base_type(const struct hlsl_type *type);
-bool hlsl_sm1_register_from_semantic(const struct vkd3d_shader_version *version, const char *semantic_name,
-        unsigned int semantic_index, bool output, enum vkd3d_shader_register_type *type, unsigned int *reg);
-bool hlsl_sm1_usage_from_semantic(const char *semantic_name,
-        uint32_t semantic_index, D3DDECLUSAGE *usage, uint32_t *usage_idx);
 
 void write_sm1_uniforms(struct hlsl_ctx *ctx, struct vkd3d_bytecode_buffer *buffer);
 int d3dbc_compile(struct vsir_program *program, uint64_t config_flags,
         const struct vkd3d_shader_compile_info *compile_info, const struct vkd3d_shader_code *ctab,
+        struct vkd3d_shader_code *out, struct vkd3d_shader_message_context *message_context);
+
+int tpf_compile(struct vsir_program *program, uint64_t config_flags,
         struct vkd3d_shader_code *out, struct vkd3d_shader_message_context *message_context,
         struct hlsl_ctx *ctx, struct hlsl_ir_function_decl *entry_func);
-
-bool hlsl_sm4_usage_from_semantic(struct hlsl_ctx *ctx,
-        const struct hlsl_semantic *semantic, bool output, D3D_NAME *usage);
-bool hlsl_sm4_register_from_semantic(struct hlsl_ctx *ctx, const struct hlsl_semantic *semantic,
-        bool output, enum vkd3d_shader_register_type *type, bool *has_idx);
-int hlsl_sm4_write(struct hlsl_ctx *ctx, struct hlsl_ir_function_decl *entry_func, struct vkd3d_shader_code *out);
 
 struct hlsl_ir_function_decl *hlsl_compile_internal_function(struct hlsl_ctx *ctx, const char *name, const char *hlsl);
 
