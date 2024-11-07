@@ -80,7 +80,9 @@ centroid                {return KW_CENTROID;            }
 column_major            {return KW_COLUMN_MAJOR;        }
 ComputeShader           {return KW_COMPUTESHADER;       }
 compile                 {return KW_COMPILE;             }
+CompileShader           {return KW_COMPILESHADER;       }
 const                   {return KW_CONST;               }
+ConstructGSWithSO       {return KW_CONSTRUCTGSWITHSO;   }
 continue                {return KW_CONTINUE;            }
 DepthStencilState       {return KW_DEPTHSTENCILSTATE;   }
 DepthStencilView        {return KW_DEPTHSTENCILVIEW;    }
@@ -88,7 +90,6 @@ default                 {return KW_DEFAULT;             }
 discard                 {return KW_DISCARD;             }
 DomainShader            {return KW_DOMAINSHADER;        }
 do                      {return KW_DO;                  }
-double                  {return KW_DOUBLE;              }
 else                    {return KW_ELSE;                }
 export                  {return KW_EXPORT;              }
 extern                  {return KW_EXTERN;              }
