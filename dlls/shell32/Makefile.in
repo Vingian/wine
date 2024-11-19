@@ -1,7 +1,7 @@
 EXTRADEFS = -D_SHELL32_
 MODULE    = shell32.dll
 IMPORTLIB = shell32
-IMPORTS   = uuid shlwapi user32 gdi32 advapi32
+IMPORTS   = uuid shlwapi user32 gdi32 advapi32 aclui
 DELAYIMPORTS = ole32 oleaut32 shdocvw version comctl32 comdlg32 gdiplus
 
 SOURCES = \
@@ -40,6 +40,8 @@ SOURCES = \
 	resources/folder.svg \
 	resources/folder_open.svg \
 	resources/help.svg \
+	resources/ietoolbar.svg \
+	resources/ietoolbar_small.svg \
 	resources/image.svg \
 	resources/internet.svg \
 	resources/log_off.svg \
