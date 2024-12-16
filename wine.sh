@@ -8,10 +8,10 @@ STAGING_EXCLUDE='-W ntdll-ForceBottomUpAlloc'
 WINE_VERSION=($(curl -s 'https://gitlab.winehq.org/api/v4/projects/5/releases' | jq -r '.[0].tag_name' 2>/dev/null | grep -o '[0-9.]*'))
 STAGING_VERSION=($(curl -s 'https://gitlab.winehq.org/api/v4/projects/231/repository/tags' | jq -r '.[0].name' 2>/dev/null | grep -o '[0-9.]*'))
 
-[ ${#WINE_VERSION[@]} -gt 1 ] && WINE_RC_VERSION=${WINE_VERSION[1]} || WINE_RC_VERSION='9999'
-[ ${#WINE_VERSION[@]} -ge 1 ] && WINE_VERSION=${WINE_VERSION[0]} || WINE_VERSION=''
-[ ${#STAGING_VERSION[@]} -gt 1 ] && STAGING_RC_VERSION=${STAGING_VERSION[1]} || STAGING_RC_VERSION='9999'
-[ ${#STAGING_VERSION[@]} -ge 1 ] && STAGING_VERSION=${STAGING_VERSION[0]} || STAGING_VERSION=''
+[ ${#WINE_VERSION[@]} -gt 1 ] && WINE_RC_VERSION="${WINE_VERSION[1]}" || WINE_RC_VERSION='9999'
+[ ${#WINE_VERSION[@]} -ge 1 ] && WINE_VERSION="${WINE_VERSION[0]}" || WINE_VERSION=''
+[ ${#STAGING_VERSION[@]} -gt 1 ] && STAGING_RC_VERSION="${STAGING_VERSION[1]}" || STAGING_RC_VERSION='9999'
+[ ${#STAGING_VERSION[@]} -ge 1 ] && STAGING_VERSION="${STAGING_VERSION[0]}" || STAGING_VERSION=''
 
 [[ -z "$WINE_VERSION" || -z "$STAGING_VERSION" ]] && exit 0
 
@@ -19,8 +19,8 @@ WINE_VERSION_TAG=$([ "$WINE_RC_VERSION" != '9999' ] && echo "${WINE_VERSION}-rc$
 STAGING_VERSION_TAG=$([ "$STAGING_RC_VERSION" != '9999' ] && echo "${STAGING_VERSION}-rc${STAGING_RC_VERSION}" || echo "$STAGING_VERSION")
 
 if [[ -n "$GH_REPO" && -n "$GH_TOKEN" ]]; then
-	HAVE_WINE_VERSION=$([ "$(curl -s -w '%{http_code}' -o /dev/null "https://x-access-token:${GH_TOKEN}@api.github.com/repos/${GH_REPO}/git/refs/tags/wine-${WINE_VERSION_TAG}")" -ne 404 ] && echo "y" || echo "")
-	HAVE_STAGING_VERSION=$([ "$(curl -s -w '%{http_code}' -o /dev/null "https://x-access-token:${GH_TOKEN}@api.github.com/repos/${GH_REPO}/git/refs/tags/wine-${STAGING_VERSION_TAG}-staging")" -ne 404 ] && echo "y" || echo "")
+	HAVE_WINE_VERSION=$([ "$(curl -s -w '%{http_code}' -o /dev/null "https://x-access-token:${GH_TOKEN}@api.github.com/repos/${GH_REPO}/git/refs/tags/wine-${WINE_VERSION_TAG}")" -ne 404 ] && echo 'y' || echo '')
+	HAVE_STAGING_VERSION=$([ "$(curl -s -w '%{http_code}' -o /dev/null "https://x-access-token:${GH_TOKEN}@api.github.com/repos/${GH_REPO}/git/refs/tags/wine-${STAGING_VERSION_TAG}-staging")" -ne 404 ] && echo 'y' || echo '')
 fi
 
 if [ $(echo "$WINE_VERSION > $STAGING_VERSION" | bc -l) -eq 0 ] && [[ -z "$HAVE_WINE_VERSION" || -z "$HAVE_STAGING_VERSION" ]]; then
