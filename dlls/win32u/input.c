@@ -1327,11 +1327,7 @@ HKL WINAPI NtUserActivateKeyboardLayout( HKL layout, UINT flags )
  */
 UINT WINAPI NtUserGetKeyboardLayoutList( INT size, HKL *layouts )
 {
-    char buffer[4096];
-    KEY_NODE_INFORMATION *key_info = (KEY_NODE_INFORMATION *)buffer;
-    KEY_VALUE_PARTIAL_INFORMATION *value_info = (KEY_VALUE_PARTIAL_INFORMATION *)buffer;
-    DWORD count, tmp, i = 0;
-    HKEY hkey, subkey;
+    DWORD count;
     HKL layout;
 
     TRACE_(keyboard)( "size %d, layouts %p.\n", size, layouts );
@@ -1345,33 +1341,6 @@ UINT WINAPI NtUserGetKeyboardLayoutList( INT size, HKL *layouts )
     if (size && layouts)
     {
         layouts[count - 1] = layout;
-        if (count == size) return count;
-    }
-
-    if ((hkey = reg_open_key( NULL, keyboard_layouts_keyW, sizeof(keyboard_layouts_keyW) )))
-    {
-        while (!NtEnumerateKey( hkey, i++, KeyNodeInformation, key_info,
-                                sizeof(buffer) - sizeof(WCHAR), &tmp ))
-        {
-            if (!(subkey = reg_open_key( hkey, key_info->Name, key_info->NameLength ))) continue;
-            key_info->Name[key_info->NameLength / sizeof(WCHAR)] = 0;
-            tmp = wcstoul( key_info->Name, NULL, 16 );
-            if (query_reg_ascii_value( subkey, "Layout Id", value_info, sizeof(buffer) ) &&
-                value_info->Type == REG_SZ)
-                tmp = 0xf000 | (wcstoul( (const WCHAR *)value_info->Data, NULL, 16 ) & 0xfff);
-            NtClose( subkey );
-
-            tmp = MAKELONG( LOWORD( layout ), LOWORD( tmp ) );
-            if (layout == UlongToHandle( tmp )) continue;
-
-            count++;
-            if (size && layouts)
-            {
-                layouts[count - 1] = UlongToHandle( tmp );
-                if (count == size) break;
-            }
-        }
-        NtClose( hkey );
     }
 
     return count;
@@ -1916,7 +1885,7 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
 {
     HWND previous = get_active_window();
     BOOL ret;
-    DWORD old_thread, new_thread;
+    DWORD winflags, old_thread, new_thread;
     CBTACTIVATESTRUCT cbt;
 
     if (previous == hwnd)
@@ -1925,16 +1894,24 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
         goto done;
     }
 
-    /* call CBT hook chain */
-    cbt.fMouse     = mouse;
-    cbt.hWndActive = previous;
-    if (call_hooks( WH_CBT, HCBT_ACTIVATE, (WPARAM)hwnd, (LPARAM)&cbt, sizeof(cbt) )) return FALSE;
-
-    if (is_window( previous ))
+    /* Prevent a recursive activation loop with the activation messages */
+    winflags = win_set_flags(hwnd, WIN_IS_IN_ACTIVATION, 0);
+    if (!(winflags & WIN_IS_IN_ACTIVATION))
     {
-        send_message( previous, WM_NCACTIVATE, FALSE, (LPARAM)hwnd );
-        send_message( previous, WM_ACTIVATE,
-                      MAKEWPARAM( WA_INACTIVE, is_iconic(previous) ), (LPARAM)hwnd );
+        ret = FALSE;
+
+        /* call CBT hook chain */
+        cbt.fMouse     = mouse;
+        cbt.hWndActive = previous;
+        if (call_hooks( WH_CBT, HCBT_ACTIVATE, (WPARAM)hwnd, (LPARAM)&cbt, sizeof(cbt) ))
+            goto clear_flags;
+
+        if (is_window(previous))
+        {
+            send_message( previous, WM_NCACTIVATE, FALSE, (LPARAM)hwnd );
+            send_message( previous, WM_ACTIVATE,
+                          MAKEWPARAM( WA_INACTIVE, is_iconic(previous) ), (LPARAM)hwnd );
+        }
     }
 
     SERVER_START_REQ( set_active_window )
@@ -1956,7 +1933,11 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
         if (send_message( hwnd, WM_QUERYNEWPALETTE, 0, 0 ))
             send_message_timeout( HWND_BROADCAST, WM_PALETTEISCHANGING, (WPARAM)hwnd, 0,
                                   SMTO_ABORTIFHUNG, 2000, FALSE );
-        if (!is_window(hwnd)) return FALSE;
+        if (!is_window(hwnd))
+        {
+            ret = FALSE;
+            goto clear_flags;
+        }
     }
 
     old_thread = previous ? get_window_thread( previous, NULL ) : 0;
@@ -1989,15 +1970,24 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
         }
     }
 
-    if (is_window(hwnd))
+    if (!(winflags & WIN_IS_IN_ACTIVATION) && is_window(hwnd))
     {
         send_message( hwnd, WM_NCACTIVATE, hwnd == NtUserGetForegroundWindow(), (LPARAM)previous );
         send_message( hwnd, WM_ACTIVATE,
                       MAKEWPARAM( mouse ? WA_CLICKACTIVE : WA_ACTIVE, is_iconic(hwnd) ),
                       (LPARAM)previous );
+
+        send_message( hwnd, WM_NCPOINTERUP, 0, 0);
+
         if (NtUserGetAncestor( hwnd, GA_PARENT ) == get_desktop_window())
             NtUserPostMessage( get_desktop_window(), WM_PARENTNOTIFY, WM_NCACTIVATE, (LPARAM)hwnd );
+
+        if (hwnd == NtUserGetForegroundWindow() && !is_iconic( hwnd ))
+            NtUserSetActiveWindow( hwnd );
+
     }
+
+    user_driver->pSetActiveWindow( hwnd );
 
     /* now change focus if necessary */
     if (focus)
@@ -2014,9 +2004,13 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
         }
     }
 
+clear_flags:
+    win_set_flags(hwnd, 0, WIN_IS_IN_ACTIVATION);
+
 done:
     if (hwnd) clip_fullscreen_window( hwnd, FALSE );
-    return TRUE;
+
+    return ret;
 }
 
 /**********************************************************************
