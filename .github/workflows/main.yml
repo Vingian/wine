@@ -1,0 +1,21 @@
+name: wine
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 20 * * *'
+jobs:
+  wine:
+    permissions: write-all
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:multilib-devel
+    steps:
+      - uses: actions/checkout@v4
+      - name: wine
+        run: |
+          pacman -Sy --needed --noconfirm archlinux-keyring
+          pacman -Sy --needed --noconfirm git python wget jq
+          chmod +x wine.sh && ./wine.sh
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
