@@ -378,6 +378,10 @@ static enum event_merge_action merge_raw_motion_events( XIRawEvent *prev, XIRawE
  */
 static enum event_merge_action merge_events( XEvent *prev, XEvent *next )
 {
+#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+    struct x11drv_thread_data *thread_data = x11drv_thread_data();
+#endif
+
     switch (prev->type)
     {
     case ConfigureNotify:
@@ -409,19 +413,21 @@ static enum event_merge_action merge_events( XEvent *prev, XEvent *next )
         case GenericEvent:
             if (next->xcookie.extension != xinput2_opcode) break;
             if (next->xcookie.evtype != XI_RawMotion) break;
-            if (x11drv_thread_data()->warp_serial) break;
+            if (thread_data->xinput2_rawinput) break;
+            if (thread_data->warp_serial) break;
             return MERGE_KEEP;
         }
         break;
     case GenericEvent:
         if (prev->xcookie.extension != xinput2_opcode) break;
         if (prev->xcookie.evtype != XI_RawMotion) break;
+        if (thread_data->xinput2_rawinput) break;
         switch (next->type)
         {
         case GenericEvent:
             if (next->xcookie.extension != xinput2_opcode) break;
             if (next->xcookie.evtype != XI_RawMotion) break;
-            if (x11drv_thread_data()->warp_serial) break;
+            if (thread_data->warp_serial) break;
             return merge_raw_motion_events( prev->xcookie.data, next->xcookie.data );
 #endif
         }
@@ -642,12 +648,26 @@ static void set_input_focus( struct x11drv_win_data *data )
  */
 static void set_focus( Display *display, HWND hwnd, Time time )
 {
-    HWND focus;
+    HWND focus, old_active;
     Window win;
     GUITHREADINFO threadinfo;
 
+    old_active = NtUserGetForegroundWindow();
+
+    /* prevent recursion */
+    x11drv_thread_data()->active_window = hwnd;
+
     TRACE( "setting foreground window to %p\n", hwnd );
     NtUserSetForegroundWindow( hwnd );
+
+    /* Some applications expect that a being deactivated topmost window
+     * receives the WM_WINDOWPOSCHANGING/WM_WINDOWPOSCHANGED messages,
+     * and perform some specific actions. Chessmaster is one of such apps.
+     * Window Manager keeps a topmost window on top in z-oder, so there is
+     * no need to actually do anything, just send the messages.
+     */
+    if (old_active && (NtUserGetWindowLongW( old_active, GWL_EXSTYLE ) & WS_EX_TOPMOST))
+        NtUserSetWindowPos( old_active, hwnd, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER );
 
     threadinfo.cbSize = sizeof(threadinfo);
     NtUserGetGUIThreadInfo( 0, &threadinfo );
@@ -903,6 +923,8 @@ static void focus_out( Display *display , HWND hwnd )
 
     if (!is_current_process_focused())
     {
+        x11drv_thread_data()->active_window = 0;
+
         /* Abey : 6-Oct-99. Check again if the focus out window is the
            Foreground window, because in most cases the messages sent
            above must have already changed the foreground window, in which
