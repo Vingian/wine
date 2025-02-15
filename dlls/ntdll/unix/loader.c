@@ -90,6 +90,8 @@
 #include "winioctl.h"
 #include "winternl.h"
 #include "unix_private.h"
+#include "esync.h"
+#include "fsync.h"
 #include "wine/list.h"
 #include "ntsyscalls.h"
 #include "wine/debug.h"
@@ -371,10 +373,16 @@ static const char *get_pe_dir( WORD machine )
 
 static void set_dll_path(void)
 {
-    char *p, *path = getenv( "WINEDLLPATH" );
+    char *p, *path = getenv( "WINEDLLPATH" ), *be_runtime = getenv( "PROTON_BATTLEYE_RUNTIME" ), *eac_runtime = getenv( "PROTON_EAC_RUNTIME" );
     int i, count = 0;
 
     if (path) for (p = path, count = 1; *p; p++) if (*p == ':') count++;
+
+    if (be_runtime)
+        count += 2;
+
+    if (eac_runtime)
+        count += 2;
 
     dll_paths = malloc( (count + 2) * sizeof(*dll_paths) );
     count = 0;
@@ -386,6 +394,42 @@ static void set_dll_path(void)
         path = strdup(path);
         for (p = strtok( path, ":" ); p; p = strtok( NULL, ":" )) dll_paths[count++] = strdup( p );
         free( path );
+    }
+
+    if (be_runtime)
+    {
+        const char lib32[] = "/v1/lib/wine/";
+        const char lib64[] = "/v1/lib64/wine/";
+
+        p = malloc( strlen(be_runtime) + strlen(lib32) + 1 );
+        strcpy(p, be_runtime);
+        strcat(p, lib32);
+
+        dll_paths[count++] = p;
+
+        p = malloc( strlen(be_runtime) + strlen(lib64) + 1 );
+        strcpy(p, be_runtime);
+        strcat(p, lib64);
+
+        dll_paths[count++] = p;
+    }
+
+    if (eac_runtime)
+    {
+        const char lib32[] = "/v2/lib32/";
+        const char lib64[] = "/v2/lib64/";
+
+        p = malloc( strlen(eac_runtime) + strlen(lib32) + 1 );
+        strcpy(p, eac_runtime);
+        strcat(p, lib32);
+
+        dll_paths[count++] = p;
+
+        p = malloc( strlen(eac_runtime) + strlen(lib64) + 1 );
+        strcpy(p, eac_runtime);
+        strcat(p, lib64);
+
+        dll_paths[count++] = p;
     }
 
     for (i = 0; i < count; i++) dll_path_maxlen = max( dll_path_maxlen, strlen(dll_paths[i]) );
@@ -1011,6 +1055,7 @@ static const unixlib_entry_t unix_call_funcs[] =
     load_so_dll,
     unwind_builtin_dll,
     unixcall_wine_dbg_write,
+    unixcall_wine_needs_override_large_address_aware,
     unixcall_wine_server_call,
     unixcall_wine_server_fd_to_handle,
     unixcall_wine_server_handle_to_fd,
@@ -1037,6 +1082,34 @@ const unixlib_entry_t unix_call_wow64_funcs[] =
 };
 
 #endif  /* _WIN64 */
+
+BOOL ac_odyssey;
+BOOL fsync_simulate_sched_quantum;
+
+static void hacks_init(void)
+{
+    static const char upc_exe[] = "Ubisoft Game Launcher\\upc.exe";
+    static const char ac_odyssey_exe[] = "ACOdyssey.exe";
+    const char *env_str;
+
+    if (main_argc > 1 && strstr(main_argv[1], ac_odyssey_exe))
+    {
+        ERR("HACK: AC Odyssey sync tweak on.\n");
+        ac_odyssey = TRUE;
+        return;
+    }
+    env_str = getenv("WINE_FSYNC_SIMULATE_SCHED_QUANTUM");
+    if (env_str)
+        fsync_simulate_sched_quantum = !!atoi(env_str);
+    else if (main_argc > 1)
+        fsync_simulate_sched_quantum = !!strstr(main_argv[1], upc_exe);
+    if (fsync_simulate_sched_quantum)
+        ERR("HACK: Simulating sched quantum in fsync.\n");
+
+    env_str = getenv("SteamGameId");
+    if (env_str && !strcmp(env_str, "50130"))
+        setenv("WINESTEAMNOEXEC", "1", 0);
+}
 
 
 /* check if the library is the correct architecture */
@@ -1858,6 +1931,9 @@ static void start_main_thread(void)
     signal_alloc_thread( teb );
     dbg_init();
     startup_info_size = server_init_process();
+    hacks_init();
+    fsync_init();
+    esync_init();
     virtual_map_user_shared_data();
     init_cpu_info();
     init_files();
