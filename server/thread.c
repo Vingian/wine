@@ -53,6 +53,7 @@
 #include "request.h"
 #include "user.h"
 #include "security.h"
+#include "esync.h"
 
 
 /* thread queues */
@@ -99,6 +100,7 @@ static const struct object_ops thread_apc_ops =
     add_queue,                  /* add_queue */
     remove_queue,               /* remove_queue */
     thread_apc_signaled,        /* signaled */
+    NULL,                       /* get_esync_fd */
     no_satisfied,               /* satisfied */
     no_signal,                  /* signal */
     no_get_fd,                  /* get_fd */
@@ -141,6 +143,7 @@ static const struct object_ops context_ops =
     add_queue,                  /* add_queue */
     remove_queue,               /* remove_queue */
     context_signaled,           /* signaled */
+    NULL,                       /* get_esync_fd */
     no_satisfied,               /* satisfied */
     no_signal,                  /* signal */
     no_get_fd,                  /* get_fd */
@@ -177,6 +180,7 @@ struct type_descr thread_type =
 
 static void dump_thread( struct object *obj, int verbose );
 static int thread_signaled( struct object *obj, struct wait_queue_entry *entry );
+static int thread_get_esync_fd( struct object *obj, enum esync_type *type );
 static unsigned int thread_map_access( struct object *obj, unsigned int access );
 static void thread_poll_event( struct fd *fd, int event );
 static struct list *thread_get_kernel_obj_list( struct object *obj );
@@ -190,6 +194,7 @@ static const struct object_ops thread_ops =
     add_queue,                  /* add_queue */
     remove_queue,               /* remove_queue */
     thread_signaled,            /* signaled */
+    thread_get_esync_fd,        /* get_esync_fd */
     no_satisfied,               /* satisfied */
     no_signal,                  /* signal */
     no_get_fd,                  /* get_fd */
@@ -274,6 +279,8 @@ static inline void init_thread_structure( struct thread *thread )
     thread->context         = NULL;
     thread->teb             = 0;
     thread->entry_point     = 0;
+    thread->esync_fd        = -1;
+    thread->esync_apc_fd    = -1;
     thread->system_regs     = 0;
     thread->queue           = NULL;
     thread->wait            = NULL;
@@ -294,6 +301,7 @@ static inline void init_thread_structure( struct thread *thread )
     thread->token           = NULL;
     thread->desc            = NULL;
     thread->desc_len        = 0;
+    thread->exit_poll       = NULL;
 
     thread->creation_time = current_time;
     thread->exit_time     = 0;
@@ -421,6 +429,12 @@ struct thread *create_thread( int fd, struct process *process, const struct secu
         }
     }
 
+    if (do_esync())
+    {
+        thread->esync_fd = esync_create_fd( 0, 0 );
+        thread->esync_apc_fd = esync_create_fd( 0, 0 );
+    }
+
     set_fd_events( thread->request_fd, POLLIN );  /* start listening to events */
     add_process_thread( thread->process, thread );
     return thread;
@@ -498,8 +512,12 @@ static void destroy_thread( struct object *obj )
     list_remove( &thread->entry );
     cleanup_thread( thread );
     release_object( thread->process );
+    if (thread->exit_poll) remove_timeout_user( thread->exit_poll );
     if (thread->id) free_ptid( thread->id );
     if (thread->token) release_object( thread->token );
+
+    if (do_esync())
+        close( thread->esync_fd );
 }
 
 /* dump a thread on stdout for debugging purposes */
@@ -515,7 +533,14 @@ static void dump_thread( struct object *obj, int verbose )
 static int thread_signaled( struct object *obj, struct wait_queue_entry *entry )
 {
     struct thread *mythread = (struct thread *)obj;
-    return (mythread->state == TERMINATED);
+    return mythread->state == TERMINATED && !mythread->exit_poll;
+}
+
+static int thread_get_esync_fd( struct object *obj, enum esync_type *type )
+{
+    struct thread *thread = (struct thread *)obj;
+    *type = ESYNC_MANUAL_SERVER;
+    return thread->esync_fd;
 }
 
 static unsigned int thread_map_access( struct object *obj, unsigned int access )
@@ -686,6 +711,7 @@ unsigned int set_thread_priority( struct thread *thread, int priority_class, int
         return STATUS_THREAD_IS_TERMINATING;
 
     thread->priority = priority;
+    set_scheduler_priority( thread );
 
     /* if thread is gone or hasn't started yet, this will be called again from init_thread with a unix_tid */
     if (thread->unix_tid != -1) apply_thread_priority( thread, get_base_priority( priority_class, priority ));
@@ -1139,6 +1165,9 @@ void wake_up( struct object *obj, int max )
     struct list *ptr;
     int ret;
 
+    if (do_esync())
+        esync_wake_up( obj );
+
     LIST_FOR_EACH( ptr, &obj->wait_queue )
     {
         struct wait_queue_entry *entry = LIST_ENTRY( ptr, struct wait_queue_entry, entry );
@@ -1223,7 +1252,12 @@ static int queue_apc( struct process *process, struct thread *thread, struct thr
     grab_object( apc );
     list_add_tail( queue, &apc->entry );
     if (!list_prev( queue, &apc->entry ))  /* first one */
+    {
         wake_thread( thread );
+
+        if (do_esync() && queue == &thread->user_apc)
+            esync_wake_fd( thread->esync_apc_fd );
+    }
 
     return 1;
 }
@@ -1270,6 +1304,10 @@ static struct thread_apc *thread_dequeue_apc( struct thread *thread, int system 
         apc = LIST_ENTRY( ptr, struct thread_apc, entry );
         list_remove( ptr );
     }
+
+    if (do_esync() && list_empty( &thread->system_apc ) && list_empty( &thread->user_apc ))
+        esync_clear( thread->esync_apc_fd );
+
     return apc;
 }
 
@@ -1346,6 +1384,26 @@ int thread_get_inflight_fd( struct thread *thread, int client )
     return -1;
 }
 
+static void check_terminated( void *arg )
+{
+    struct thread *thread = arg;
+    assert( thread->obj.ops == &thread_ops );
+    assert( thread->state == TERMINATED );
+
+    /* don't wake up until the thread is really dead, to avoid race conditions */
+    if (thread->unix_tid != -1 && !kill( thread->unix_tid, 0 ))
+    {
+        thread->exit_poll = add_timeout_user( -TICKS_PER_SEC / 1000, check_terminated, thread );
+        return;
+    }
+
+    /* grab reference since object can be destroyed while trying to wake up */
+    grab_object( &thread->obj );
+    thread->exit_poll = NULL;
+    wake_up( &thread->obj, 0 );
+    release_object( &thread->obj );
+}
+
 /* kill a thread on the spot */
 void kill_thread( struct thread *thread, int violent_death )
 {
@@ -1365,8 +1423,14 @@ void kill_thread( struct thread *thread, int violent_death )
     }
     kill_console_processes( thread, 0 );
     abandon_mutexes( thread );
-    wake_up( &thread->obj, 0 );
-    if (violent_death) send_thread_signal( thread, SIGQUIT );
+    if (do_esync())
+        esync_abandon_mutexes( thread );
+    if (violent_death)
+    {
+        send_thread_signal( thread, SIGQUIT );
+        check_terminated( thread );
+    }
+    else wake_up( &thread->obj, 0 );
     cleanup_thread( thread );
     remove_process_thread( thread->process, thread );
     release_object( thread );
