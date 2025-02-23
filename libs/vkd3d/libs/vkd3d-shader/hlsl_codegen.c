@@ -62,9 +62,7 @@ static struct hlsl_ir_node *new_offset_from_path_index(struct hlsl_ctx *ctx, str
                 size /= 4;
             }
 
-            if (!(c = hlsl_new_uint_constant(ctx, size, loc)))
-                return NULL;
-            hlsl_block_add_instr(block, c);
+            c = hlsl_block_add_uint_constant(ctx, block, size, loc);
 
             if (!(idx_offset = hlsl_new_binary_expr(ctx, HLSL_OP2_MUL, c, idx)))
                 return NULL;
@@ -86,12 +84,7 @@ static struct hlsl_ir_node *new_offset_from_path_index(struct hlsl_ctx *ctx, str
                 field_offset /= 4;
             }
 
-            if (!(c = hlsl_new_uint_constant(ctx, field_offset, loc)))
-                return NULL;
-            hlsl_block_add_instr(block, c);
-
-            idx_offset = c;
-
+            idx_offset = hlsl_block_add_uint_constant(ctx, block, field_offset, loc);
             break;
         }
 
@@ -122,9 +115,7 @@ static struct hlsl_ir_node *new_offset_instr_from_deref(struct hlsl_ctx *ctx, st
 
     hlsl_block_init(block);
 
-    if (!(offset = hlsl_new_uint_constant(ctx, 0, loc)))
-        return NULL;
-    hlsl_block_add_instr(block, offset);
+    offset = hlsl_block_add_uint_constant(ctx, block, 0, loc);
 
     VKD3D_ASSERT(deref->var);
     type = deref->var->data_type;
@@ -203,47 +194,59 @@ static bool clean_constant_deref_offset_srcs(struct hlsl_ctx *ctx, struct hlsl_d
 }
 
 
-/* Split uniforms into two variables representing the constant and temp
- * registers, and copy the former to the latter, so that writes to uniforms
- * work. */
-static void prepend_uniform_copy(struct hlsl_ctx *ctx, struct hlsl_block *block, struct hlsl_ir_var *temp)
+/* For a uniform variable, create a temp copy of it so, in case a value is
+ * stored to the uniform at some point the shader, all derefs can be diverted
+ * to this temp copy instead.
+ * Also, promote the uniform to an extern var. */
+static void prepend_uniform_copy(struct hlsl_ctx *ctx, struct hlsl_block *block, struct hlsl_ir_var *uniform)
 {
-    struct hlsl_ir_var *uniform;
     struct hlsl_ir_node *store;
     struct hlsl_ir_load *load;
+    struct hlsl_ir_var *temp;
     char *new_name;
 
-    /* Use the synthetic name for the temp, rather than the uniform, so that we
-     * can write the uniform name into the shader reflection data. */
-
-    if (!(uniform = hlsl_new_var(ctx, temp->name, temp->data_type,
-            &temp->loc, NULL, temp->storage_modifiers, &temp->reg_reservation)))
-        return;
-    list_add_before(&temp->scope_entry, &uniform->scope_entry);
-    list_add_tail(&ctx->extern_vars, &uniform->extern_entry);
     uniform->is_uniform = 1;
-    uniform->is_param = temp->is_param;
-    uniform->buffer = temp->buffer;
-    if (temp->default_values)
-    {
-        /* Transfer default values from the temp to the uniform. */
-        VKD3D_ASSERT(!uniform->default_values);
-        VKD3D_ASSERT(hlsl_type_component_count(temp->data_type) == hlsl_type_component_count(uniform->data_type));
-        uniform->default_values = temp->default_values;
-        temp->default_values = NULL;
-    }
+    list_add_tail(&ctx->extern_vars, &uniform->extern_entry);
 
-    if (!(new_name = hlsl_sprintf_alloc(ctx, "<temp-%s>", temp->name)))
+    if (!(new_name = hlsl_sprintf_alloc(ctx, "<temp-%s>", uniform->name)))
         return;
-    temp->name = new_name;
 
-    if (!(load = hlsl_new_var_load(ctx, uniform, &temp->loc)))
+    if (!(temp = hlsl_new_var(ctx, new_name, uniform->data_type,
+            &uniform->loc, NULL, uniform->storage_modifiers, NULL)))
+    {
+        vkd3d_free(new_name);
+        return;
+    }
+    list_add_before(&uniform->scope_entry, &temp->scope_entry);
+
+    uniform->temp_copy = temp;
+
+    if (!(load = hlsl_new_var_load(ctx, uniform, &uniform->loc)))
         return;
     list_add_head(&block->instrs, &load->node.entry);
 
     if (!(store = hlsl_new_simple_store(ctx, temp, &load->node)))
         return;
     list_add_after(&load->node.entry, &store->entry);
+}
+
+/* If a uniform is written to at some point in the shader, all dereferences
+ * must point to the temp copy instead, which is what this pass does. */
+static bool divert_written_uniform_derefs_to_temp(struct hlsl_ctx *ctx, struct hlsl_deref *deref,
+        struct hlsl_ir_node *instr)
+{
+    if (!deref->var->is_uniform || !deref->var->first_write)
+        return false;
+
+    /* Skip derefs from instructions before first write so copies from the
+     * uniform to the temp are unaffected. */
+    if (instr->index < deref->var->first_write)
+        return false;
+
+    VKD3D_ASSERT(deref->var->temp_copy);
+
+    deref->var = deref->var->temp_copy;
+    return true;
 }
 
 static void validate_field_semantic(struct hlsl_ctx *ctx, struct hlsl_struct_field *field)
@@ -436,9 +439,7 @@ static void prepend_input_copy(struct hlsl_ctx *ctx, struct hlsl_ir_function_dec
                 return;
             hlsl_init_simple_deref_from_var(&patch_deref, input);
 
-            if (!(idx = hlsl_new_uint_constant(ctx, patch_index, &var->loc)))
-                return;
-            hlsl_block_add_instr(block, idx);
+            idx = hlsl_block_add_uint_constant(ctx, block, patch_index, &var->loc);
 
             if (!(load = hlsl_new_load_index(ctx, &patch_deref, idx, loc)))
                 return;
@@ -461,9 +462,7 @@ static void prepend_input_copy(struct hlsl_ctx *ctx, struct hlsl_ir_function_dec
 
         if (type->class == HLSL_CLASS_MATRIX)
         {
-            if (!(c = hlsl_new_uint_constant(ctx, i, &var->loc)))
-                return;
-            hlsl_block_add_instr(block, c);
+            c = hlsl_block_add_uint_constant(ctx, block, i, &var->loc);
 
             if (!(store = hlsl_new_store_index(ctx, &lhs->src, c, cast, 0, &var->loc)))
                 return;
@@ -526,9 +525,7 @@ static void prepend_input_copy_recurse(struct hlsl_ctx *ctx, struct hlsl_ir_func
                 force_align = (i == 0);
             }
 
-            if (!(c = hlsl_new_uint_constant(ctx, i, &var->loc)))
-                return;
-            hlsl_block_add_instr(block, c);
+            c = hlsl_block_add_uint_constant(ctx, block, i, &var->loc);
 
             /* This redundant load is expected to be deleted later by DCE. */
             if (!(element_load = hlsl_new_load_index(ctx, &lhs->src, c, loc)))
@@ -603,9 +600,7 @@ static void append_output_copy(struct hlsl_ctx *ctx, struct hlsl_ir_function_dec
 
         if (type->class == HLSL_CLASS_MATRIX)
         {
-            if (!(c = hlsl_new_uint_constant(ctx, i, &var->loc)))
-                return;
-            hlsl_block_add_instr(&func->body, c);
+            c = hlsl_block_add_uint_constant(ctx, &func->body, i, &var->loc);
 
             if (!(load = hlsl_new_load_index(ctx, &rhs->src, c, &var->loc)))
                 return;
@@ -666,9 +661,7 @@ static void append_output_copy_recurse(struct hlsl_ctx *ctx,
                 force_align = (i == 0);
             }
 
-            if (!(c = hlsl_new_uint_constant(ctx, i, &var->loc)))
-                return;
-            hlsl_block_add_instr(&func->body, c);
+            c = hlsl_block_add_uint_constant(ctx, &func->body, i, &var->loc);
 
             if (!(element_load = hlsl_new_load_index(ctx, &rhs->src, c, loc)))
                 return;
@@ -704,6 +697,9 @@ bool hlsl_transform_ir(struct hlsl_ctx *ctx, bool (*func)(struct hlsl_ctx *ctx, 
 {
     struct hlsl_ir_node *instr, *next;
     bool progress = false;
+
+    if (ctx->result)
+        return false;
 
     LIST_FOR_EACH_ENTRY_SAFE(instr, next, &block->instrs, struct hlsl_ir_node, entry)
     {
@@ -1112,9 +1108,7 @@ static struct hlsl_ir_node *add_zero_mipmap_level(struct hlsl_ctx *ctx, struct h
         return NULL;
     hlsl_block_add_instr(block, store);
 
-    if (!(zero = hlsl_new_uint_constant(ctx, 0, loc)))
-        return NULL;
-    hlsl_block_add_instr(block, zero);
+    zero = hlsl_block_add_uint_constant(ctx, block, 0, loc);
 
     if (!(store = hlsl_new_store_index(ctx, &coords_deref, NULL, zero, 1u << dim_count, loc)))
         return NULL;
@@ -1326,9 +1320,7 @@ static bool lower_index_loads(struct hlsl_ctx *ctx, struct hlsl_ir_node *instr, 
         {
             struct hlsl_ir_node *c;
 
-            if (!(c = hlsl_new_uint_constant(ctx, i, &instr->loc)))
-                return false;
-            hlsl_block_add_instr(block, c);
+            c = hlsl_block_add_uint_constant(ctx, block, i, &instr->loc);
 
             if (!(load = hlsl_new_load_index(ctx, &var_deref, c, &instr->loc)))
                 return false;
@@ -1398,7 +1390,7 @@ static bool lower_broadcasts(struct hlsl_ctx *ctx, struct hlsl_ir_node *instr, s
 
 /* Allocate a unique, ordered index to each instruction, which will be used for
  * copy propagation and computing liveness ranges.
- * Index 0 means unused; index 1 means function entry, so start at 2. */
+ * Index 0 means unused, so start at 1. */
 static unsigned int index_instructions(struct hlsl_block *block, unsigned int index)
 {
     struct hlsl_ir_node *instr;
@@ -2210,7 +2202,10 @@ bool hlsl_copy_propagation_execute(struct hlsl_ctx *ctx, struct hlsl_block *bloc
     struct copy_propagation_state state;
     bool progress;
 
-    index_instructions(block, 2);
+    if (ctx->result)
+        return false;
+
+    index_instructions(block, 1);
 
     copy_propagation_state_init(&state, ctx);
 
@@ -2959,9 +2954,7 @@ static bool lower_nonconstant_array_loads(struct hlsl_ctx *ctx, struct hlsl_ir_n
         struct hlsl_ir_load *var_load, *specific_load;
         struct hlsl_deref deref_copy = {0};
 
-        if (!(const_i = hlsl_new_uint_constant(ctx, i, &cut_index->loc)))
-            return false;
-        hlsl_block_add_instr(block, const_i);
+        const_i = hlsl_block_add_uint_constant(ctx, block, i, &cut_index->loc);
 
         operands[0] = cut_index;
         operands[1] = const_i;
@@ -4634,6 +4627,9 @@ static bool dce(struct hlsl_ctx *ctx, struct hlsl_ir_node *instr, void *context)
             struct hlsl_ir_store *store = hlsl_ir_store(instr);
             struct hlsl_ir_var *var = store->lhs.var;
 
+            if (var->is_output_semantic)
+                break;
+
             if (var->last_read < instr->index)
             {
                 list_remove(&instr->entry);
@@ -4938,32 +4934,21 @@ static void compute_liveness_recurse(struct hlsl_block *block, unsigned int loop
     }
 }
 
-static void init_var_liveness(struct hlsl_ir_var *var)
-{
-    if (var->is_uniform || var->is_input_semantic)
-        var->first_write = 1;
-    else if (var->is_output_semantic)
-        var->last_read = UINT_MAX;
-}
-
 static void compute_liveness(struct hlsl_ctx *ctx, struct hlsl_ir_function_decl *entry_func)
 {
     struct hlsl_scope *scope;
     struct hlsl_ir_var *var;
 
-    index_instructions(&entry_func->body, 2);
+    if (ctx->result)
+        return;
+
+    index_instructions(&entry_func->body, 1);
 
     LIST_FOR_EACH_ENTRY(scope, &ctx->scopes, struct hlsl_scope, entry)
     {
         LIST_FOR_EACH_ENTRY(var, &scope->vars, struct hlsl_ir_var, scope_entry)
             var->first_write = var->last_read = 0;
     }
-
-    LIST_FOR_EACH_ENTRY(var, &ctx->extern_vars, struct hlsl_ir_var, extern_entry)
-        init_var_liveness(var);
-
-    LIST_FOR_EACH_ENTRY(var, &entry_func->extern_vars, struct hlsl_ir_var, extern_entry)
-        init_var_liveness(var);
 
     compute_liveness_recurse(&entry_func->body, 0, 0);
 }
@@ -5001,7 +4986,7 @@ struct register_allocator
 
     /* Indexable temps are allocated separately and always keep their index regardless of their
      * lifetime. */
-    size_t indexable_count;
+    uint32_t indexable_count;
 
     /* Total number of registers allocated so far. Used to declare sm4 temp count. */
     uint32_t reg_count;
@@ -5773,7 +5758,7 @@ static uint32_t allocate_temp_registers(struct hlsl_ctx *ctx, struct hlsl_ir_fun
             if (var->is_output_semantic)
             {
                 record_allocation(ctx, &allocator, 0, VKD3DSP_WRITEMASK_ALL,
-                        var->first_write, var->last_read, 0, false);
+                        var->first_write, UINT_MAX, 0, false);
                 break;
             }
         }
@@ -5781,6 +5766,13 @@ static uint32_t allocate_temp_registers(struct hlsl_ctx *ctx, struct hlsl_ir_fun
 
     allocate_temp_registers_recurse(ctx, &entry_func->body, &allocator);
     vkd3d_free(allocator.allocations);
+
+    if (allocator.indexable_count)
+        TRACE("Declaration of function \"%s\" required %u temp registers, and %u indexable temps.\n",
+                entry_func->func->name, allocator.reg_count, allocator.indexable_count);
+    else
+        TRACE("Declaration of function \"%s\" required %u temp registers.\n",
+                entry_func->func->name, allocator.reg_count);
 
     return allocator.reg_count;
 }
@@ -7016,6 +7008,24 @@ void hlsl_lower_index_loads(struct hlsl_ctx *ctx, struct hlsl_block *body)
     lower_ir(ctx, lower_index_loads, body);
 }
 
+static void hlsl_run_folding_passes(struct hlsl_ctx *ctx, struct hlsl_block *body)
+{
+    bool progress;
+
+    hlsl_transform_ir(ctx, fold_redundant_casts, body, NULL);
+    do
+    {
+        progress = hlsl_transform_ir(ctx, hlsl_fold_constant_exprs, body, NULL);
+        progress |= hlsl_transform_ir(ctx, hlsl_fold_constant_identities, body, NULL);
+        progress |= hlsl_transform_ir(ctx, hlsl_normalize_binary_exprs, body, NULL);
+        progress |= hlsl_transform_ir(ctx, hlsl_fold_constant_swizzles, body, NULL);
+        progress |= hlsl_copy_propagation_execute(ctx, body);
+        progress |= hlsl_transform_ir(ctx, fold_swizzle_chains, body, NULL);
+        progress |= hlsl_transform_ir(ctx, remove_trivial_swizzles, body, NULL);
+        progress |= hlsl_transform_ir(ctx, remove_trivial_conditional_branches, body, NULL);
+    } while (progress);
+}
+
 void hlsl_run_const_passes(struct hlsl_ctx *ctx, struct hlsl_block *body)
 {
     bool progress;
@@ -7040,19 +7050,8 @@ void hlsl_run_const_passes(struct hlsl_ctx *ctx, struct hlsl_block *body)
     lower_ir(ctx, lower_int_abs, body);
     lower_ir(ctx, lower_casts_to_bool, body);
     lower_ir(ctx, lower_float_modulus, body);
-    hlsl_transform_ir(ctx, fold_redundant_casts, body, NULL);
 
-    do
-    {
-        progress = hlsl_transform_ir(ctx, hlsl_fold_constant_exprs, body, NULL);
-        progress |= hlsl_transform_ir(ctx, hlsl_fold_constant_identities, body, NULL);
-        progress |= hlsl_transform_ir(ctx, hlsl_normalize_binary_exprs, body, NULL);
-        progress |= hlsl_transform_ir(ctx, hlsl_fold_constant_swizzles, body, NULL);
-        progress |= hlsl_copy_propagation_execute(ctx, body);
-        progress |= hlsl_transform_ir(ctx, fold_swizzle_chains, body, NULL);
-        progress |= hlsl_transform_ir(ctx, remove_trivial_swizzles, body, NULL);
-        progress |= hlsl_transform_ir(ctx, remove_trivial_conditional_branches, body, NULL);
-    } while (progress);
+    hlsl_run_folding_passes(ctx, body);
 }
 
 static void generate_vsir_signature_entry(struct hlsl_ctx *ctx, struct vsir_program *program,
@@ -12513,6 +12512,9 @@ static void process_entry_function(struct hlsl_ctx *ctx,
     lower_ir(ctx, lower_casts_to_bool, body);
     lower_ir(ctx, lower_int_dot, body);
 
+    compute_liveness(ctx, entry_func);
+    transform_derefs(ctx, divert_written_uniform_derefs_to_temp, &entry_func->body);
+
     if (hlsl_version_lt(ctx, 4, 0))
         hlsl_transform_ir(ctx, lower_separate_samples, body, NULL);
 
@@ -12565,6 +12567,8 @@ static void process_entry_function(struct hlsl_ctx *ctx,
     }
 
     lower_ir(ctx, validate_nonconstant_vector_store_derefs, body);
+
+    hlsl_run_folding_passes(ctx, body);
 
     do
         compute_liveness(ctx, entry_func);
