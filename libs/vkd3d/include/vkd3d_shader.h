@@ -2991,7 +2991,8 @@ VKD3D_SHADER_API void vkd3d_shader_free_scan_descriptor_info(
  * signature. To retrieve signatures from other shader types, or other signature
  * types, use vkd3d_shader_scan() and struct vkd3d_shader_scan_signature_info.
  * This function returns the same input signature that is returned in
- * struct vkd3d_shader_scan_signature_info.
+ * struct vkd3d_shader_scan_signature_info for dxbc-tpf shaders, but may return
+ * different information for dxbc-dxil shaders.
  *
  * \param dxbc Compiled byte code, in DXBC format.
  *
