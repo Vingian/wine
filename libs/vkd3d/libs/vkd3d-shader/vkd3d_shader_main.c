@@ -23,6 +23,8 @@
 #include <stdio.h>
 #include <math.h>
 
+/* VKD3D_DEBUG_ENV_NAME("VKD3D_SHADER_DEBUG"); */
+
 static inline int char_to_int(char c)
 {
     if ('0' <= c && c <= '9')
@@ -454,8 +456,15 @@ struct shader_dump_data
     const char *target_suffix;
 };
 
+enum shader_dump_type
+{
+    SHADER_DUMP_TYPE_SOURCE,
+    SHADER_DUMP_TYPE_PREPROC,
+    SHADER_DUMP_TYPE_TARGET,
+};
+
 static void vkd3d_shader_dump_shader(const struct shader_dump_data *dump_data,
-        const void *data, size_t size, bool source)
+        const void *data, size_t size, enum shader_dump_type type)
 {
     static const char hexadecimal_digits[] = "0123456789abcdef";
     const uint8_t *checksum = dump_data->checksum;
@@ -480,8 +489,10 @@ static void vkd3d_shader_dump_shader(const struct shader_dump_data *dump_data,
     if (dump_data->profile)
         pos += snprintf(filename + pos, ARRAY_SIZE(filename) - pos, "-%s", dump_data->profile);
 
-    if (source)
+    if (type == SHADER_DUMP_TYPE_SOURCE)
         pos += snprintf(filename + pos, ARRAY_SIZE(filename) - pos, "-source.%s", dump_data->source_suffix);
+    else if (type == SHADER_DUMP_TYPE_PREPROC)
+        pos += snprintf(filename + pos, ARRAY_SIZE(filename) - pos, "-preproc.%s", dump_data->source_suffix);
     else
         pos += snprintf(filename + pos, ARRAY_SIZE(filename) - pos, "-target.%s", dump_data->target_suffix);
 
@@ -737,12 +748,20 @@ void vkd3d_shader_free_messages(char *messages)
 static bool vkd3d_shader_signature_from_shader_signature(struct vkd3d_shader_signature *signature,
         const struct shader_signature *src)
 {
-    unsigned int i;
+    struct vkd3d_shader_signature_element *d;
+    const struct signature_element *e;
+    size_t count, i, j;
 
-    signature->element_count = src->element_count;
+    for (i = 0, count = 0; i < src->element_count; ++i)
+    {
+        e = &src->elements[i];
+        count += e->register_count;
+    }
+
+    signature->element_count = count;
     if (!src->elements)
     {
-        VKD3D_ASSERT(!signature->element_count);
+        VKD3D_ASSERT(!count);
         signature->elements = NULL;
         return true;
     }
@@ -750,30 +769,25 @@ static bool vkd3d_shader_signature_from_shader_signature(struct vkd3d_shader_sig
     if (!(signature->elements = vkd3d_calloc(signature->element_count, sizeof(*signature->elements))))
         return false;
 
-    for (i = 0; i < signature->element_count; ++i)
+    for (i = 0, d = signature->elements; i < src->element_count; ++i)
     {
-        struct vkd3d_shader_signature_element *d = &signature->elements[i];
-        struct signature_element *e = &src->elements[i];
-
-        if (!(d->semantic_name = vkd3d_strdup(e->semantic_name)))
+        for (j = 0, e = &src->elements[i]; j < e->register_count; ++j)
         {
-            for (unsigned int j = 0; j < i; ++j)
+            if (!(d->semantic_name = vkd3d_strdup(e->semantic_name)))
             {
-                vkd3d_free((void *)signature->elements[j].semantic_name);
+                vkd3d_shader_free_shader_signature(signature);
+                return false;
             }
-            vkd3d_free(signature->elements);
-            return false;
+            d->semantic_index = e->semantic_index + j;
+            d->stream_index = e->stream_index;
+            d->sysval_semantic = e->sysval_semantic;
+            d->component_type = e->component_type;
+            d->register_index = e->register_index + j;
+            d->mask = e->mask;
+            d->used_mask = e->used_mask;
+            d->min_precision = e->min_precision;
+            ++d;
         }
-        d->semantic_index = e->semantic_index;
-        d->stream_index = e->stream_index;
-        d->sysval_semantic = e->sysval_semantic;
-        d->component_type = e->component_type;
-        d->register_index = e->register_index;
-        if (e->register_count > 1)
-            FIXME("Arrayed elements are not supported yet.\n");
-        d->mask = e->mask;
-        d->used_mask = e->used_mask;
-        d->min_precision = e->min_precision;
     }
 
     return true;
@@ -1631,7 +1645,7 @@ int vkd3d_shader_scan(const struct vkd3d_shader_compile_info *compile_info, char
     vkd3d_shader_message_context_init(&message_context, compile_info->log_level);
 
     fill_shader_dump_data(compile_info, &dump_data);
-    vkd3d_shader_dump_shader(&dump_data, compile_info->source.code, compile_info->source.size, true);
+    vkd3d_shader_dump_shader(&dump_data, compile_info->source.code, compile_info->source.size, SHADER_DUMP_TYPE_SOURCE);
 
     if (compile_info->source_type == VKD3D_SHADER_SOURCE_HLSL)
     {
@@ -1711,13 +1725,16 @@ int vsir_program_compile(struct vsir_program *program, uint64_t config_flags,
 }
 
 static int compile_hlsl(const struct vkd3d_shader_compile_info *compile_info,
-        struct vkd3d_shader_code *out, struct vkd3d_shader_message_context *message_context)
+        const struct shader_dump_data *dump_data, struct vkd3d_shader_code *out,
+        struct vkd3d_shader_message_context *message_context)
 {
     struct vkd3d_shader_code preprocessed;
     int ret;
 
     if ((ret = preproc_lexer_parse(compile_info, &preprocessed, message_context)))
         return ret;
+
+    vkd3d_shader_dump_shader(dump_data, preprocessed.code, preprocessed.size, SHADER_DUMP_TYPE_PREPROC);
 
     ret = hlsl_compile_shader(&preprocessed, compile_info, out, message_context);
 
@@ -1745,11 +1762,11 @@ int vkd3d_shader_compile(const struct vkd3d_shader_compile_info *compile_info,
     vkd3d_shader_message_context_init(&message_context, compile_info->log_level);
 
     fill_shader_dump_data(compile_info, &dump_data);
-    vkd3d_shader_dump_shader(&dump_data, compile_info->source.code, compile_info->source.size, true);
+    vkd3d_shader_dump_shader(&dump_data, compile_info->source.code, compile_info->source.size, SHADER_DUMP_TYPE_SOURCE);
 
     if (compile_info->source_type == VKD3D_SHADER_SOURCE_HLSL)
     {
-        ret = compile_hlsl(compile_info, out, &message_context);
+        ret = compile_hlsl(compile_info, &dump_data, out, &message_context);
     }
     else if (compile_info->source_type == VKD3D_SHADER_SOURCE_FX)
     {
@@ -1768,7 +1785,7 @@ int vkd3d_shader_compile(const struct vkd3d_shader_compile_info *compile_info,
     }
 
     if (ret >= 0)
-        vkd3d_shader_dump_shader(&dump_data, out->code, out->size, false);
+        vkd3d_shader_dump_shader(&dump_data, out->code, out->size, SHADER_DUMP_TYPE_TARGET);
 
     vkd3d_shader_message_context_trace_messages(&message_context);
     if (!vkd3d_shader_message_context_copy_messages(&message_context, messages))
@@ -1961,9 +1978,7 @@ const enum vkd3d_shader_source_type *vkd3d_shader_get_supported_source_types(uns
         VKD3D_SHADER_SOURCE_DXBC_TPF,
         VKD3D_SHADER_SOURCE_HLSL,
         VKD3D_SHADER_SOURCE_D3D_BYTECODE,
-#ifdef VKD3D_SHADER_UNSUPPORTED_DXIL
         VKD3D_SHADER_SOURCE_DXBC_DXIL,
-#endif
         VKD3D_SHADER_SOURCE_FX,
     };
 
@@ -2012,7 +2027,6 @@ const enum vkd3d_shader_target_type *vkd3d_shader_get_supported_target_types(
         VKD3D_SHADER_TARGET_D3D_ASM,
     };
 
-#ifdef VKD3D_SHADER_UNSUPPORTED_DXIL
     static const enum vkd3d_shader_target_type dxbc_dxil_types[] =
     {
         VKD3D_SHADER_TARGET_SPIRV_BINARY,
@@ -2021,7 +2035,6 @@ const enum vkd3d_shader_target_type *vkd3d_shader_get_supported_target_types(
 # endif
         VKD3D_SHADER_TARGET_D3D_ASM,
     };
-#endif
 
     static const enum vkd3d_shader_target_type fx_types[] =
     {
@@ -2044,11 +2057,9 @@ const enum vkd3d_shader_target_type *vkd3d_shader_get_supported_target_types(
             *count = ARRAY_SIZE(d3dbc_types);
             return d3dbc_types;
 
-#ifdef VKD3D_SHADER_UNSUPPORTED_DXIL
         case VKD3D_SHADER_SOURCE_DXBC_DXIL:
             *count = ARRAY_SIZE(dxbc_dxil_types);
             return dxbc_dxil_types;
-#endif
 
         case VKD3D_SHADER_SOURCE_FX:
             *count = ARRAY_SIZE(fx_types);
