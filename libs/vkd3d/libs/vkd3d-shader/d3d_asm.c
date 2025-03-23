@@ -2069,15 +2069,22 @@ static const char *get_component_type_name(enum vkd3d_shader_component_type type
 {
     switch (type)
     {
-        case VKD3D_SHADER_COMPONENT_VOID:   return "void";
-        case VKD3D_SHADER_COMPONENT_UINT:   return "uint";
-        case VKD3D_SHADER_COMPONENT_INT:    return "int";
-        case VKD3D_SHADER_COMPONENT_FLOAT:  return "float";
-        case VKD3D_SHADER_COMPONENT_BOOL:   return "bool";
-        case VKD3D_SHADER_COMPONENT_DOUBLE: return "double";
-        case VKD3D_SHADER_COMPONENT_UINT64: return "uint64";
-        default:                            return "??";
+        case VKD3D_SHADER_COMPONENT_VOID:       return "void";
+        case VKD3D_SHADER_COMPONENT_UINT:       return "uint";
+        case VKD3D_SHADER_COMPONENT_INT:        return "int";
+        case VKD3D_SHADER_COMPONENT_FLOAT:      return "float";
+        case VKD3D_SHADER_COMPONENT_BOOL:       return "bool";
+        case VKD3D_SHADER_COMPONENT_DOUBLE:     return "double";
+        case VKD3D_SHADER_COMPONENT_UINT64:     return "uint64";
+        case VKD3D_SHADER_COMPONENT_INT64:      return "int64";
+        case VKD3D_SHADER_COMPONENT_FLOAT16:    return "float16";
+        case VKD3D_SHADER_COMPONENT_UINT16:     return "uint16";
+        case VKD3D_SHADER_COMPONENT_INT16:      return "int16";
+        case VKD3D_SHADER_COMPONENT_TYPE_FORCE_32BIT:
+            break;
     }
+
+    return "??";
 }
 
 static const char *get_minimum_precision_name(enum vkd3d_shader_minimum_precision prec)
@@ -2097,6 +2104,7 @@ static const char *get_semantic_register_name(enum vkd3d_shader_sysval_semantic 
 {
     switch (semantic)
     {
+        case VKD3D_SHADER_SV_PRIMITIVE_ID:        return "primID";
         case VKD3D_SHADER_SV_DEPTH:               return "oDepth";
         case VKD3D_SHADER_SV_DEPTH_GREATER_EQUAL: return "oDepthGE";
         case VKD3D_SHADER_SV_DEPTH_LESS_EQUAL:    return "oDepthLE";
