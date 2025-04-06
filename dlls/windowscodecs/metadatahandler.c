@@ -1131,9 +1131,8 @@ static HRESULT load_IFD_entry(IStream *input, const GUID *vendor, DWORD options,
             CoTaskMemFree(item->value.caub.pElems);
             return hr;
         }
-        hr = IStream_Read(input, item->value.caub.pElems, count, &bytesread);
-        if (bytesread != count) hr = E_FAIL;
-        if (hr != S_OK)
+        hr = IStream_Read(input, item->value.caub.pElems, count, NULL);
+        if (FAILED(hr))
         {
             CoTaskMemFree(item->value.caub.pElems);
             return hr;
@@ -1166,7 +1165,7 @@ static HRESULT load_IFD_entry(IStream *input, const GUID *vendor, DWORD options,
 
         item->value.vt |= VT_VECTOR;
         item->value.caui.cElems = count;
-        item->value.caui.pElems = CoTaskMemAlloc(count * 2);
+        item->value.caui.pElems = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, count * 2);
         if (!item->value.caui.pElems) return E_OUTOFMEMORY;
 
         pos.QuadPart = value;
@@ -1176,9 +1175,8 @@ static HRESULT load_IFD_entry(IStream *input, const GUID *vendor, DWORD options,
             CoTaskMemFree(item->value.caui.pElems);
             return hr;
         }
-        hr = IStream_Read(input, item->value.caui.pElems, count * 2, &bytesread);
-        if (bytesread != count * 2) hr = E_FAIL;
-        if (hr != S_OK)
+        hr = IStream_Read(input, item->value.caui.pElems, count * 2, NULL);
+        if (FAILED(hr))
         {
             CoTaskMemFree(item->value.caui.pElems);
             return hr;
@@ -1209,9 +1207,8 @@ static HRESULT load_IFD_entry(IStream *input, const GUID *vendor, DWORD options,
             CoTaskMemFree(item->value.caul.pElems);
             return hr;
         }
-        hr = IStream_Read(input, item->value.caul.pElems, count * 4, &bytesread);
-        if (bytesread != count * 4) hr = E_FAIL;
-        if (hr != S_OK)
+        hr = IStream_Read(input, item->value.caul.pElems, count * 4, NULL);
+        if (FAILED(hr))
         {
             CoTaskMemFree(item->value.caul.pElems);
             return hr;
@@ -1237,8 +1234,7 @@ static HRESULT load_IFD_entry(IStream *input, const GUID *vendor, DWORD options,
             hr = IStream_Seek(input, pos, STREAM_SEEK_SET, NULL);
             if (FAILED(hr)) return hr;
 
-            hr = IStream_Read(input, &ull, sizeof(ull), &bytesread);
-            if (bytesread != sizeof(ull)) hr = E_FAIL;
+            hr = IStream_Read(input, &ull, sizeof(ull), NULL);
             if (hr != S_OK) return hr;
 
             item->value.uhVal.QuadPart = ull;
@@ -1266,9 +1262,8 @@ static HRESULT load_IFD_entry(IStream *input, const GUID *vendor, DWORD options,
                 CoTaskMemFree(item->value.cauh.pElems);
                 return hr;
             }
-            hr = IStream_Read(input, item->value.cauh.pElems, count * 8, &bytesread);
-            if (bytesread != count * 8) hr = E_FAIL;
-            if (hr != S_OK)
+            hr = IStream_Read(input, item->value.cauh.pElems, count * 8, NULL);
+            if (FAILED(hr))
             {
                 CoTaskMemFree(item->value.cauh.pElems);
                 return hr;
@@ -1304,9 +1299,8 @@ static HRESULT load_IFD_entry(IStream *input, const GUID *vendor, DWORD options,
             CoTaskMemFree(item->value.pszVal);
             return hr;
         }
-        hr = IStream_Read(input, item->value.pszVal, count, &bytesread);
-        if (bytesread != count) hr = E_FAIL;
-        if (hr != S_OK)
+        hr = IStream_Read(input, item->value.pszVal, count, NULL);
+        if (FAILED(hr))
         {
             CoTaskMemFree(item->value.pszVal);
             return hr;
@@ -1340,9 +1334,8 @@ static HRESULT load_IFD_entry(IStream *input, const GUID *vendor, DWORD options,
             CoTaskMemFree(item->value.blob.pBlobData);
             return hr;
         }
-        hr = IStream_Read(input, item->value.blob.pBlobData, count, &bytesread);
-        if (bytesread != count) hr = E_FAIL;
-        if (hr != S_OK)
+        hr = IStream_Read(input, item->value.blob.pBlobData, count, NULL);
+        if (FAILED(hr))
         {
             CoTaskMemFree(item->value.blob.pBlobData);
             return hr;
