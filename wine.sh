@@ -56,13 +56,16 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	mkdir src
 	popd
 
+	if grep -q 'HAVE_LINUX_FS_H' wine/configure && pushd wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/fsync > /dev/null; then
+		grep -q 'HAVE_LINUX_FS_H' fsync_futex_waitv.patch || sed -i 's/HAVE_LINUX_FILTER_H/HAVE_LINUX_FS_H/' fsync_futex_waitv.patch
+		grep -q 'linux/fs.h' fsync_futex_waitv.patch || sed -i '/+++[[:space:]]*b\/configure\.ac/,/+[[:space:]]*linux\/futex\.h/{/ [[:space:]]*link\.h/d;s/^+\([[:space:]]*\)linux\/futex\.h\([[:space:]]*\\\)$/ \1linux\/fs\.h\2\n&/}' fsync_futex_waitv.patch
+		popd > /dev/null
+	fi
+
 	if [ -z "$HAVE_WINE_VERSION" ]; then
 		cp -r wine-staging wine-tkg-git/wine-tkg-git/src/wine-staging-git
 		cp -r wine wine-tkg-git/wine-tkg-git/src/wine-git
 		pushd wine-tkg-git/wine-tkg-git
-		grep -q 'HAVE_LINUX_FS_H' src/wine-git/configure && \
-  			sed -i 's/HAVE_LINUX_FILTER_H/HAVE_LINUX_FS_H/' wine-tkg-patches/proton/fsync/fsync_futex_waitv.patch && \
-  			sed -i '/+++[[:space:]]*b\/configure\.ac/,/+[[:space:]]*linux\/futex\.h/{/ [[:space:]]*link\.h/d;s/^+\([[:space:]]*\)linux\/futex\.h\([[:space:]]*\\\)$/ \1linux\/fs\.h\2\n&/}' wine-tkg-patches/proton/fsync/fsync_futex_waitv.patch
 		sed -i '/_use_staging=/s/true/false/' customization.cfg
 		./non-makepkg-build.sh </dev/null || exit 0
   		grep -q ' FAILED ' prepare.log && exit 0
@@ -74,9 +77,6 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	cp -r wine-staging wine-tkg-git/wine-tkg-git/src/wine-staging-git
 	cp -r wine wine-tkg-git/wine-tkg-git/src/wine-git
 	pushd wine-tkg-git/wine-tkg-git
-	grep -q 'HAVE_LINUX_FS_H' src/wine-git/configure && \
-		sed -i 's/HAVE_LINUX_FILTER_H/HAVE_LINUX_FS_H/' wine-tkg-patches/proton/fsync/fsync_futex_waitv.patch && \
-		sed -i '/+++[[:space:]]*b\/configure\.ac/,/+[[:space:]]*linux\/futex\.h/{/ [[:space:]]*link\.h/d;s/^+\([[:space:]]*\)linux\/futex\.h\([[:space:]]*\\\)$/ \1linux\/fs\.h\2\n&/}' wine-tkg-patches/proton/fsync/fsync_futex_waitv.patch
 	sed -i '/_use_staging=/s/false/true/' customization.cfg
 	./non-makepkg-build.sh </dev/null || exit 0
  	grep -q ' FAILED ' prepare.log && exit 0
