@@ -62,6 +62,11 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 		popd > /dev/null
 	fi
 
+	if grep -q 'queue_shm_t           *' wine/server/queue.c && pushd wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/esync > /dev/null; then
+		sed -i 's/const queue_shm_t     \*/queue_shm_t           \*/' esync-unix-mainline.patch
+		popd > /dev/null
+	fi
+
 	if [ -z "$HAVE_WINE_VERSION" ]; then
 		cp -r wine-staging wine-tkg-git/wine-tkg-git/src/wine-staging-git
 		cp -r wine wine-tkg-git/wine-tkg-git/src/wine-git
