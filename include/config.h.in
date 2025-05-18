@@ -207,6 +207,9 @@
 /* Define to 1 if you have the <linux/rtnetlink.h> header file. */
 #undef HAVE_LINUX_RTNETLINK_H
 
+/* Define to 1 if you have the <linux/seccomp.h> header file. */
+#undef HAVE_LINUX_SECCOMP_H
+
 /* Define to 1 if you have the <linux/serial.h> header file. */
 #undef HAVE_LINUX_SERIAL_H
 
@@ -336,6 +339,9 @@
 /* Define to 1 if you have the 'posix_fallocate' function. */
 #undef HAVE_POSIX_FALLOCATE
 
+/* Define to 1 if you have the 'ppoll' function. */
+#undef HAVE_PPOLL
+
 /* Define to 1 if you have the 'prctl' function. */
 #undef HAVE_PRCTL
 
@@ -347,6 +353,12 @@
 
 /* Define to 1 if you have the <pwd.h> header file. */
 #undef HAVE_PWD_H
+
+/* Define to 1 if you have the 'renameat' function. */
+#undef HAVE_RENAMEAT
+
+/* Define to 1 if you have the 'renameat2' function. */
+#undef HAVE_RENAMEAT2
 
 /* Define to 1 if the system has the type 'request_sense'. */
 #undef HAVE_REQUEST_SENSE
@@ -395,6 +407,9 @@
 
 /* Define to 1 if 'interface_id' is a member of 'sg_io_hdr_t'. */
 #undef HAVE_SG_IO_HDR_T_INTERFACE_ID
+
+/* Define to 1 if you have the `shm_open' function. */
+#undef HAVE_SHM_OPEN
 
 /* Define to 1 if 'si_fd' is a member of 'siginfo_t'. */
 #undef HAVE_SIGINFO_T_SI_FD
@@ -524,6 +539,9 @@
 
 /* Define to 1 if you have the <sys/epoll.h> header file. */
 #undef HAVE_SYS_EPOLL_H
+
+/* Define to 1 if you have the <sys/eventfd.h> header file. */
+#undef HAVE_SYS_EVENTFD_H
 
 /* Define to 1 if you have the <sys/event.h> header file. */
 #undef HAVE_SYS_EVENT_H
@@ -680,6 +698,9 @@
 
 /* Define to 1 if you have the <X11/extensions/XInput2.h> header file. */
 #undef HAVE_X11_EXTENSIONS_XINPUT2_H
+
+/* Define to 1 if you have the <X11/extensions/XInput.h> header file. */
+#undef HAVE_X11_EXTENSIONS_XINPUT_H
 
 /* Define to 1 if you have the <X11/extensions/Xrandr.h> header file. */
 #undef HAVE_X11_EXTENSIONS_XRANDR_H
