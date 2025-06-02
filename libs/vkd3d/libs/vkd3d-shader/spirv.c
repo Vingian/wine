@@ -4239,7 +4239,7 @@ static bool spirv_compiler_get_register_info(struct spirv_compiler *compiler,
     if (!(entry = rb_get(&compiler->symbol_table, &reg_symbol)))
     {
         spirv_compiler_error(compiler, VKD3D_SHADER_ERROR_SPV_INVALID_REGISTER_TYPE,
-                "Unrecognized register (%s).\n", debug_vkd3d_symbol(&reg_symbol));
+                "Unrecognized register (%s).", debug_vkd3d_symbol(&reg_symbol));
         memset(register_info, 0, sizeof(*register_info));
         return false;
     }
