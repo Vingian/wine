@@ -66,6 +66,7 @@
 
 #define TAG_AON9 VKD3D_MAKE_TAG('A', 'o', 'n', '9')
 #define TAG_CLI4 VKD3D_MAKE_TAG('C', 'L', 'I', '4')
+#define TAG_CLIT VKD3D_MAKE_TAG('C', 'L', 'I', 'T')
 #define TAG_CTAB VKD3D_MAKE_TAG('C', 'T', 'A', 'B')
 #define TAG_DXBC VKD3D_MAKE_TAG('D', 'X', 'B', 'C')
 #define TAG_DXIL VKD3D_MAKE_TAG('D', 'X', 'I', 'L')
@@ -278,7 +279,7 @@ static inline unsigned int vkd3d_popcount(unsigned int v)
 {
 #ifdef _MSC_VER
     return __popcnt(v);
-#elif defined(__MINGW32__)
+#elif defined(HAVE_BUILTIN_POPCOUNT)
     return __builtin_popcount(v);
 #else
     v -= (v >> 1) & 0x55555555;

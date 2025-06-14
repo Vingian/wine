@@ -145,6 +145,7 @@ struct wg_format
             uint32_t payload_type;
             uint32_t codec_data_len;
             unsigned char codec_data[64];
+            UINT8 is_xma;
         } audio;
 
         /* Valid members for different video formats:
@@ -221,6 +222,7 @@ struct wg_parser_create_params
 {
     wg_parser_t parser;
     UINT8 output_compressed;
+    UINT8 use_opengl;
     UINT8 err_on;
     UINT8 warn_on;
 };

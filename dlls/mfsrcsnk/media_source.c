@@ -228,6 +228,7 @@ struct media_source
     IMFGetService IMFGetService_iface;
     IMFRateSupport IMFRateSupport_iface;
     IMFRateControl IMFRateControl_iface;
+    IMFMediaShutdownNotify IMFMediaShutdownNotify_iface;
     IMFAsyncCallback async_create_iface;
     IMFAsyncCallback async_start_iface;
     IMFAsyncCallback async_stop_iface;
@@ -236,6 +237,7 @@ struct media_source
     LONG refcount;
 
     CRITICAL_SECTION cs;
+    IMFAsyncResult *shutdown_result;
     IMFMediaEventQueue *queue;
     IMFByteStream *stream;
     WCHAR *url;
@@ -1085,6 +1087,62 @@ static const IMFRateControlVtbl media_source_IMFRateControl_vtbl =
     media_source_IMFRateControl_GetRate,
 };
 
+static struct media_source *media_source_from_IMFMediaShutdownNotify(IMFMediaShutdownNotify *iface)
+{
+    return CONTAINING_RECORD(iface, struct media_source, IMFMediaShutdownNotify_iface);
+}
+
+static HRESULT WINAPI media_source_IMFMediaShutdownNotify_QueryInterface(IMFMediaShutdownNotify *iface, REFIID riid, void **obj)
+{
+    struct media_source *source = media_source_from_IMFMediaShutdownNotify(iface);
+    return IMFMediaSource_QueryInterface(&source->IMFMediaSource_iface, riid, obj);
+}
+
+static ULONG WINAPI media_source_IMFMediaShutdownNotify_AddRef(IMFMediaShutdownNotify *iface)
+{
+    struct media_source *source = media_source_from_IMFMediaShutdownNotify(iface);
+    return IMFMediaSource_AddRef(&source->IMFMediaSource_iface);
+}
+
+static ULONG WINAPI media_source_IMFMediaShutdownNotify_Release(IMFMediaShutdownNotify *iface)
+{
+    struct media_source *source = media_source_from_IMFMediaShutdownNotify(iface);
+    return IMFMediaSource_Release(&source->IMFMediaSource_iface);
+}
+
+static HRESULT WINAPI media_source_IMFMediaShutdownNotify_set_notification_callback(IMFMediaShutdownNotify *iface,
+        IMFAsyncCallback *callback, IUnknown *state)
+{
+    struct media_source *source = media_source_from_IMFMediaShutdownNotify(iface);
+    IMFAsyncResult *result = NULL;
+    HRESULT hr = S_OK;
+
+    EnterCriticalSection(&source->cs);
+
+    if (source->state == SOURCE_SHUTDOWN)
+        hr = MF_E_SHUTDOWN;
+    else if (callback && FAILED(hr = MFCreateAsyncResult(NULL, callback, state, &result)))
+        WARN("Failed to create result, hr %#lx\n", hr);
+    else
+    {
+        if (source->shutdown_result)
+            IMFAsyncResult_Release(source->shutdown_result);
+        source->shutdown_result = result;
+    }
+
+    LeaveCriticalSection(&source->cs);
+
+    return hr;
+}
+
+static const IMFMediaShutdownNotifyVtbl media_source_IMFMediaShutdownNotify_vtbl =
+{
+    media_source_IMFMediaShutdownNotify_QueryInterface,
+    media_source_IMFMediaShutdownNotify_AddRef,
+    media_source_IMFMediaShutdownNotify_Release,
+    media_source_IMFMediaShutdownNotify_set_notification_callback,
+};
+
 static HRESULT WINAPI media_source_QueryInterface(IMFMediaSource *iface, REFIID riid, void **out)
 {
     struct media_source *source = media_source_from_IMFMediaSource(iface);
@@ -1104,6 +1162,13 @@ static HRESULT WINAPI media_source_QueryInterface(IMFMediaSource *iface, REFIID 
     {
         IMFGetService_AddRef(&source->IMFGetService_iface);
         *out = &source->IMFGetService_iface;
+        return S_OK;
+    }
+
+    if (IsEqualIID(riid, &IID_IMFMediaShutdownNotify))
+    {
+        IMFMediaShutdownNotify_AddRef(&source->IMFMediaShutdownNotify_iface);
+        *out = &source->IMFMediaShutdownNotify_iface;
         return S_OK;
     }
 
@@ -1135,6 +1200,8 @@ static ULONG WINAPI media_source_Release(IMFMediaSource *iface)
         free(source->stream_map);
         free(source->streams);
 
+        if (source->shutdown_result)
+            IMFAsyncResult_Release(source->shutdown_result);
         IMFMediaEventQueue_Release(source->queue);
         IMFByteStream_Release(source->stream);
         free(source->url);
@@ -1347,6 +1414,13 @@ static HRESULT WINAPI media_source_Shutdown(IMFMediaSource *iface)
         IMFMediaStream_Release(&stream->IMFMediaStream_iface);
     }
 
+    if (source->shutdown_result)
+    {
+        MFPutWorkItemEx(MFASYNC_CALLBACK_QUEUE_STANDARD, source->shutdown_result);
+        IMFAsyncResult_Release(source->shutdown_result);
+        source->shutdown_result = NULL;
+    }
+
     LeaveCriticalSection(&source->cs);
 
     return S_OK;
@@ -1426,10 +1500,12 @@ static void media_source_init_stream_map(struct media_source *source, UINT strea
 
     if (wcscmp(source->mime_type, L"video/mp4"))
     {
-        for (i = stream_count - 1; i >= 0; i--)
+        for (i = 0; i < stream_count; i++)
         {
-            TRACE("mapping source %p stream %u to demuxer stream %u\n", source, i, i);
-            source->stream_map[i] = i;
+            if (FAILED(get_stream_media_type(source->winedmo_demuxer, i, &major, NULL)))
+                continue;
+            TRACE("mapping source %p stream %u to demuxer stream %u\n", source, n, i);
+            source->stream_map[n++] = i;
         }
         return;
     }
@@ -1521,11 +1597,11 @@ static void media_source_init_descriptors(struct media_source *source)
         NTSTATUS status;
         GUID major;
 
-        if (FAILED(status = winedmo_demuxer_stream_lang(source->winedmo_demuxer, source->stream_map[i], buffer, ARRAY_SIZE(buffer)))
+        if ((status = winedmo_demuxer_stream_lang(source->winedmo_demuxer, source->stream_map[i], buffer, ARRAY_SIZE(buffer)))
                 || (!wcscmp(source->mime_type, L"video/mp4") && FAILED(normalize_mp4_language_code(source, buffer)))
                 || FAILED(IMFStreamDescriptor_SetString(stream->descriptor, &MF_SD_LANGUAGE, buffer)))
             WARN("Failed to set stream descriptor language, status %#lx\n", status);
-        if (FAILED(status = winedmo_demuxer_stream_name(source->winedmo_demuxer, source->stream_map[i], buffer, ARRAY_SIZE(buffer)))
+        if ((status = winedmo_demuxer_stream_name(source->winedmo_demuxer, source->stream_map[i], buffer, ARRAY_SIZE(buffer)))
                 || FAILED(IMFStreamDescriptor_SetString(stream->descriptor, &MF_SD_STREAM_NAME, buffer)))
             WARN("Failed to set stream descriptor name, status %#lx\n", status);
 
@@ -1663,7 +1739,7 @@ static HRESULT media_source_async_create(struct media_source *source, IMFAsyncRe
         GUID major;
 
         if (FAILED(hr = get_stream_media_type(source->winedmo_demuxer, source->stream_map[i], &major, &media_type)))
-            goto done;
+            continue;
         if (SUCCEEDED(hr = stream_descriptor_create(i + 1, media_type, &descriptor)))
         {
             if (SUCCEEDED(hr = media_stream_create(&source->IMFMediaSource_iface, descriptor, &source->streams[i])))
@@ -1717,6 +1793,7 @@ static HRESULT media_source_create(const WCHAR *url, IMFByteStream *stream, IMFM
     source->IMFGetService_iface.lpVtbl = &media_source_IMFGetService_vtbl;
     source->IMFRateSupport_iface.lpVtbl = &media_source_IMFRateSupport_vtbl;
     source->IMFRateControl_iface.lpVtbl = &media_source_IMFRateControl_vtbl;
+    source->IMFMediaShutdownNotify_iface.lpVtbl = &media_source_IMFMediaShutdownNotify_vtbl;
     source->async_create_iface.lpVtbl = &media_source_async_create_vtbl;
     source->async_start_iface.lpVtbl = &media_source_async_start_vtbl;
     source->async_stop_iface.lpVtbl = &media_source_async_stop_vtbl;
@@ -1905,7 +1982,7 @@ static BOOL use_gst_byte_stream_handler(void)
                        RRF_RT_REG_DWORD, NULL, &result, &size ))
         return !result;
 
-    return TRUE;
+    return FALSE;
 }
 
 static HRESULT WINAPI asf_byte_stream_plugin_factory_CreateInstance(IClassFactory *iface,
