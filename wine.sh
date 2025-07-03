@@ -47,6 +47,10 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	sed -i '/Wine update and checkout/,/rm -rf.*git clone/s/^\(\s*\)/\1#/' non-makepkg-build.sh
 	sed -i 's/_plain_version=""/_plain_version="wine-'"${WINE_VERSION_TAG}"'"/' customization.cfg
 	sed -i 's/_staging_version=""/_staging_version="v'"${STAGING_VERSION_TAG}"'"/' customization.cfg
+  	sed -i '/_use_fastsync=/s/true/false/' customization.cfg
+ 	sed -i '/_use_ntsync=/s/true/false/' customization.cfg
+  	sed -i '/_use_esync=/s/true/false/' customization.cfg
+   	sed -i '/_use_fsync=/s/true/false/' customization.cfg
 	sed -i '/_proton_fs_hack=/s/false/true/' customization.cfg
 	sed -i '/_win10_default=/s/false/true/' customization.cfg
 	sed -i '/_use_josh_flat_theme=/s/true/false/' customization.cfg
