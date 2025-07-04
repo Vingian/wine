@@ -279,5 +279,7 @@
 @ stdcall vkUpdateDescriptorSets(ptr long ptr long ptr)
 @ stdcall vkWaitForFences(ptr long ptr long int64)
 @ stdcall vkWaitSemaphores(ptr ptr int64)
+@ stdcall wine_vkAcquireKeyedMutex(ptr int64 int64 long)
+@ stdcall wine_vkReleaseKeyedMutex(ptr int64 int64)
 @ stdcall -private DllRegisterServer()
 @ stdcall -private DllUnregisterServer()
