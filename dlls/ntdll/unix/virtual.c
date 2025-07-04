@@ -131,6 +131,8 @@ struct file_view
     unsigned int  protect;       /* protection for all pages at allocation time and SEC_* flags */
 };
 
+#define SYMBOLIC_LINK_QUERY 0x0001
+
 /* per-page protection flags */
 #define VPROT_READ       0x01
 #define VPROT_WRITE      0x02
@@ -3386,6 +3388,19 @@ static NTSTATUS map_image_view( struct file_view **view_ret, struct pe_image_inf
     return map_view( view_ret, NULL, size, top_down ? MEM_TOP_DOWN : 0, vprot, limit_low, limit_high, 0 );
 }
 
+BOOL CDECL __wine_needs_override_large_address_aware(void)
+{
+    static int needs_override = -1;
+
+    if (needs_override == -1)
+    {
+        const char *str = getenv( "WINE_LARGE_ADDRESS_AWARE" );
+
+        needs_override = !str || atoi(str) == 1;
+    }
+    return needs_override;
+}
+
 
 /***********************************************************************
  *             virtual_map_image
@@ -3460,6 +3475,11 @@ done:
     if (needs_close) close( unix_fd );
     if (shared_needs_close) close( shared_fd );
     return status;
+}
+
+NTSTATUS unixcall_wine_needs_override_large_address_aware( void *args )
+{
+    return __wine_needs_override_large_address_aware();
 }
 
 
@@ -5822,34 +5842,113 @@ static NTSTATUS get_working_set_ex( HANDLE process, LPCVOID addr,
     return STATUS_SUCCESS;
 }
 
+static unsigned int read_nt_symlink( UNICODE_STRING *name, WCHAR *target, DWORD size )
+{
+    unsigned int status;
+    OBJECT_ATTRIBUTES attr;
+    HANDLE handle;
+
+    attr.Length = sizeof(attr);
+    attr.RootDirectory = 0;
+    attr.Attributes = OBJ_CASE_INSENSITIVE;
+    attr.ObjectName = name;
+    attr.SecurityDescriptor = NULL;
+    attr.SecurityQualityOfService = NULL;
+
+    if (!(status = NtOpenSymbolicLinkObject( &handle, SYMBOLIC_LINK_QUERY, &attr )))
+    {
+        UNICODE_STRING targetW;
+        targetW.Buffer = target;
+        targetW.MaximumLength = (size - 1) * sizeof(WCHAR);
+        status = NtQuerySymbolicLinkObject( handle, &targetW, NULL );
+        if (!status) target[targetW.Length / sizeof(WCHAR)] = 0;
+        NtClose( handle );
+    }
+    return status;
+}
+
+static unsigned int follow_device_symlink( WCHAR *name, SIZE_T max_path_len, WCHAR *buffer,
+                                           SIZE_T buffer_len, SIZE_T *current_path_len )
+{
+    WCHAR *p;
+    unsigned int status = STATUS_SUCCESS;
+    SIZE_T devname_len = 6 * sizeof(WCHAR); // e.g. \??\C:
+    UNICODE_STRING devname;
+    SIZE_T target_len;
+
+    if (*current_path_len > buffer_len) return STATUS_INVALID_PARAMETER;
+
+    if (*current_path_len >= devname_len && buffer[devname_len / sizeof(WCHAR) - 1] == ':') {
+        devname.Buffer = buffer;
+        devname.Length = devname_len;
+
+        p = buffer + (*current_path_len / sizeof(WCHAR));
+        if (!(status = read_nt_symlink( &devname, p, (buffer_len - *current_path_len) / sizeof(WCHAR) )))
+        {
+            *current_path_len -= devname_len; // skip the device name
+            target_len = lstrlenW(p) * sizeof(WCHAR);
+            *current_path_len += target_len;
+
+            if (*current_path_len <= max_path_len)
+            {
+                memcpy( name, p, target_len );
+                p = buffer + devname_len / sizeof(WCHAR);
+                memcpy( name + target_len / sizeof(WCHAR), p, *current_path_len - target_len);
+            }
+            else status = STATUS_BUFFER_OVERFLOW;
+        }
+    }
+    else if (*current_path_len <= max_path_len) {
+        memcpy( name, buffer, *current_path_len );
+    }
+    else status = STATUS_BUFFER_OVERFLOW;
+
+    return status;
+}
+
 static unsigned int get_memory_section_name( HANDLE process, LPCVOID addr,
                                              MEMORY_SECTION_NAME *info, SIZE_T len, SIZE_T *ret_len )
 {
+    SIZE_T current_path_len, max_path_len = 0;
+    // buffer to hold the path + 6 chars devname (e.g. \??\C:)
+    SIZE_T buffer_len = (MAX_PATH + 6) * sizeof(WCHAR);
+    WCHAR *buffer = NULL;
     unsigned int status;
 
     if (!info) return STATUS_ACCESS_VIOLATION;
+    if (!(buffer = malloc( buffer_len ))) return STATUS_NO_MEMORY;
+    if (len > sizeof(*info) + sizeof(WCHAR))
+    {
+        max_path_len = len - sizeof(*info) - sizeof(WCHAR); // dont count null char
+    }
 
     SERVER_START_REQ( get_mapping_filename )
     {
         req->process = wine_server_obj_handle( process );
         req->addr = wine_server_client_ptr( addr );
-        if (len > sizeof(*info) + sizeof(WCHAR))
-            wine_server_set_reply( req, info + 1, len - sizeof(*info) - sizeof(WCHAR) );
+        wine_server_set_reply( req, buffer, MAX_PATH );
         status = wine_server_call( req );
-        if (!status || status == STATUS_BUFFER_OVERFLOW)
+        if (!status)
         {
-            if (ret_len) *ret_len = sizeof(*info) + reply->len + sizeof(WCHAR);
-            if (len < sizeof(*info)) status = STATUS_INFO_LENGTH_MISMATCH;
+            current_path_len = reply->len;
+            status = follow_device_symlink( (WCHAR *)(info + 1), max_path_len, buffer, buffer_len, &current_path_len);
+            if (len < sizeof(*info))
+            {
+                status = STATUS_INFO_LENGTH_MISMATCH;
+            }
+
+            if (ret_len) *ret_len = sizeof(*info) + current_path_len + sizeof(WCHAR);
             if (!status)
             {
                 info->SectionFileName.Buffer = (WCHAR *)(info + 1);
-                info->SectionFileName.Length = reply->len;
-                info->SectionFileName.MaximumLength = reply->len + sizeof(WCHAR);
-                info->SectionFileName.Buffer[reply->len / sizeof(WCHAR)] = 0;
+                info->SectionFileName.Length = current_path_len;
+                info->SectionFileName.MaximumLength = current_path_len + sizeof(WCHAR);
+                info->SectionFileName.Buffer[current_path_len / sizeof(WCHAR)] = 0;
             }
         }
     }
     SERVER_END_REQ;
+    free(buffer);
     return status;
 }
 
