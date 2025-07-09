@@ -177,8 +177,7 @@ static struct wayland_gl_drawable *wayland_gl_drawable_create(HWND hwnd, HDC hdc
     /* Get the client surface for the HWND. If don't have a wayland surface
      * (e.g., HWND_MESSAGE windows) just create a dummy surface to act as the
      * target render surface. */
-    if (!(gl->client = wayland_client_surface_create(hwnd))) goto err;
-    set_client_surface(hwnd, gl->client);
+    if (!(gl->client = get_client_surface(hwnd))) goto err;
 
     gl->wl_egl_window = wl_egl_window_create(gl->client->wl_surface, width, height);
     if (!gl->wl_egl_window)
@@ -423,8 +422,6 @@ static BOOL wayland_drawable_swap(struct opengl_drawable *base)
     struct wayland_gl_drawable *gl = impl_from_opengl_drawable(base);
 
     ensure_window_surface_contents(toplevel);
-    set_client_surface(hwnd, gl->client);
-
     /* Although all the EGL surfaces we create are double-buffered, we want to
      * use some as single-buffered, so avoid swapping those. */
     if (gl->double_buffered) funcs->p_eglSwapBuffers(egl->display, gl->surface);
