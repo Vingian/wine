@@ -43,6 +43,7 @@
 #include "strsafe.h"
 #undef INITGUID
 #include "evr.h"
+#include "wine/mfinternal.h"
 /* mfd3d12 guids are not included in mfuuid */
 #define INITGUID
 #undef EXTERN_GUID
@@ -3007,7 +3008,7 @@ HRESULT attributes_CopyAllItems(struct attributes *attributes, IMFAttributes *de
     return hr;
 }
 
-static HRESULT WINAPI mfattributes_GetItem(IMFAttributes *iface, REFGUID key, PROPVARIANT *value)
+HRESULT WINAPI mfattributes_GetItem(IMFAttributes *iface, REFGUID key, PROPVARIANT *value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3016,7 +3017,7 @@ static HRESULT WINAPI mfattributes_GetItem(IMFAttributes *iface, REFGUID key, PR
     return attributes_GetItem(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_GetItemType(IMFAttributes *iface, REFGUID key, MF_ATTRIBUTE_TYPE *type)
+HRESULT WINAPI mfattributes_GetItemType(IMFAttributes *iface, REFGUID key, MF_ATTRIBUTE_TYPE *type)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3025,7 +3026,7 @@ static HRESULT WINAPI mfattributes_GetItemType(IMFAttributes *iface, REFGUID key
     return attributes_GetItemType(attributes, key, type);
 }
 
-static HRESULT WINAPI mfattributes_CompareItem(IMFAttributes *iface, REFGUID key, REFPROPVARIANT value, BOOL *result)
+HRESULT WINAPI mfattributes_CompareItem(IMFAttributes *iface, REFGUID key, REFPROPVARIANT value, BOOL *result)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3034,7 +3035,7 @@ static HRESULT WINAPI mfattributes_CompareItem(IMFAttributes *iface, REFGUID key
     return attributes_CompareItem(attributes, key, value, result);
 }
 
-static HRESULT WINAPI mfattributes_Compare(IMFAttributes *iface, IMFAttributes *theirs,
+HRESULT WINAPI mfattributes_Compare(IMFAttributes *iface, IMFAttributes *theirs,
         MF_ATTRIBUTES_MATCH_TYPE match_type, BOOL *ret)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
@@ -3044,7 +3045,7 @@ static HRESULT WINAPI mfattributes_Compare(IMFAttributes *iface, IMFAttributes *
     return attributes_Compare(attributes, theirs, match_type, ret);
 }
 
-static HRESULT WINAPI mfattributes_GetUINT32(IMFAttributes *iface, REFGUID key, UINT32 *value)
+HRESULT WINAPI mfattributes_GetUINT32(IMFAttributes *iface, REFGUID key, UINT32 *value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3053,7 +3054,7 @@ static HRESULT WINAPI mfattributes_GetUINT32(IMFAttributes *iface, REFGUID key, 
     return attributes_GetUINT32(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_GetUINT64(IMFAttributes *iface, REFGUID key, UINT64 *value)
+HRESULT WINAPI mfattributes_GetUINT64(IMFAttributes *iface, REFGUID key, UINT64 *value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3062,7 +3063,7 @@ static HRESULT WINAPI mfattributes_GetUINT64(IMFAttributes *iface, REFGUID key, 
     return attributes_GetUINT64(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_GetDouble(IMFAttributes *iface, REFGUID key, double *value)
+HRESULT WINAPI mfattributes_GetDouble(IMFAttributes *iface, REFGUID key, double *value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3071,7 +3072,7 @@ static HRESULT WINAPI mfattributes_GetDouble(IMFAttributes *iface, REFGUID key, 
     return attributes_GetDouble(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_GetGUID(IMFAttributes *iface, REFGUID key, GUID *value)
+HRESULT WINAPI mfattributes_GetGUID(IMFAttributes *iface, REFGUID key, GUID *value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3080,7 +3081,7 @@ static HRESULT WINAPI mfattributes_GetGUID(IMFAttributes *iface, REFGUID key, GU
     return attributes_GetGUID(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_GetStringLength(IMFAttributes *iface, REFGUID key, UINT32 *length)
+HRESULT WINAPI mfattributes_GetStringLength(IMFAttributes *iface, REFGUID key, UINT32 *length)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3089,7 +3090,7 @@ static HRESULT WINAPI mfattributes_GetStringLength(IMFAttributes *iface, REFGUID
     return attributes_GetStringLength(attributes, key, length);
 }
 
-static HRESULT WINAPI mfattributes_GetString(IMFAttributes *iface, REFGUID key, WCHAR *value,
+HRESULT WINAPI mfattributes_GetString(IMFAttributes *iface, REFGUID key, WCHAR *value,
         UINT32 size, UINT32 *length)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
@@ -3099,7 +3100,7 @@ static HRESULT WINAPI mfattributes_GetString(IMFAttributes *iface, REFGUID key, 
     return attributes_GetString(attributes, key, value, size, length);
 }
 
-static HRESULT WINAPI mfattributes_GetAllocatedString(IMFAttributes *iface, REFGUID key, WCHAR **value, UINT32 *length)
+HRESULT WINAPI mfattributes_GetAllocatedString(IMFAttributes *iface, REFGUID key, WCHAR **value, UINT32 *length)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3108,7 +3109,7 @@ static HRESULT WINAPI mfattributes_GetAllocatedString(IMFAttributes *iface, REFG
     return attributes_GetAllocatedString(attributes, key, value, length);
 }
 
-static HRESULT WINAPI mfattributes_GetBlobSize(IMFAttributes *iface, REFGUID key, UINT32 *size)
+HRESULT WINAPI mfattributes_GetBlobSize(IMFAttributes *iface, REFGUID key, UINT32 *size)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3117,7 +3118,7 @@ static HRESULT WINAPI mfattributes_GetBlobSize(IMFAttributes *iface, REFGUID key
     return attributes_GetBlobSize(attributes, key, size);
 }
 
-static HRESULT WINAPI mfattributes_GetBlob(IMFAttributes *iface, REFGUID key, UINT8 *buf,
+HRESULT WINAPI mfattributes_GetBlob(IMFAttributes *iface, REFGUID key, UINT8 *buf,
                 UINT32 bufsize, UINT32 *blobsize)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
@@ -3127,7 +3128,7 @@ static HRESULT WINAPI mfattributes_GetBlob(IMFAttributes *iface, REFGUID key, UI
     return attributes_GetBlob(attributes, key, buf, bufsize, blobsize);
 }
 
-static HRESULT WINAPI mfattributes_GetAllocatedBlob(IMFAttributes *iface, REFGUID key, UINT8 **buf, UINT32 *size)
+HRESULT WINAPI mfattributes_GetAllocatedBlob(IMFAttributes *iface, REFGUID key, UINT8 **buf, UINT32 *size)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3136,7 +3137,7 @@ static HRESULT WINAPI mfattributes_GetAllocatedBlob(IMFAttributes *iface, REFGUI
     return attributes_GetAllocatedBlob(attributes, key, buf, size);
 }
 
-static HRESULT WINAPI mfattributes_GetUnknown(IMFAttributes *iface, REFGUID key, REFIID riid, void **out)
+HRESULT WINAPI mfattributes_GetUnknown(IMFAttributes *iface, REFGUID key, REFIID riid, void **out)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3145,7 +3146,7 @@ static HRESULT WINAPI mfattributes_GetUnknown(IMFAttributes *iface, REFGUID key,
     return attributes_GetUnknown(attributes, key, riid, out);
 }
 
-static HRESULT WINAPI mfattributes_SetItem(IMFAttributes *iface, REFGUID key, REFPROPVARIANT value)
+HRESULT WINAPI mfattributes_SetItem(IMFAttributes *iface, REFGUID key, REFPROPVARIANT value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3154,7 +3155,7 @@ static HRESULT WINAPI mfattributes_SetItem(IMFAttributes *iface, REFGUID key, RE
     return attributes_SetItem(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_DeleteItem(IMFAttributes *iface, REFGUID key)
+HRESULT WINAPI mfattributes_DeleteItem(IMFAttributes *iface, REFGUID key)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3163,7 +3164,7 @@ static HRESULT WINAPI mfattributes_DeleteItem(IMFAttributes *iface, REFGUID key)
     return attributes_DeleteItem(attributes, key);
 }
 
-static HRESULT WINAPI mfattributes_DeleteAllItems(IMFAttributes *iface)
+HRESULT WINAPI mfattributes_DeleteAllItems(IMFAttributes *iface)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3172,7 +3173,7 @@ static HRESULT WINAPI mfattributes_DeleteAllItems(IMFAttributes *iface)
     return attributes_DeleteAllItems(attributes);
 }
 
-static HRESULT WINAPI mfattributes_SetUINT32(IMFAttributes *iface, REFGUID key, UINT32 value)
+HRESULT WINAPI mfattributes_SetUINT32(IMFAttributes *iface, REFGUID key, UINT32 value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3181,7 +3182,7 @@ static HRESULT WINAPI mfattributes_SetUINT32(IMFAttributes *iface, REFGUID key, 
     return attributes_SetUINT32(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_SetUINT64(IMFAttributes *iface, REFGUID key, UINT64 value)
+HRESULT WINAPI mfattributes_SetUINT64(IMFAttributes *iface, REFGUID key, UINT64 value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3190,7 +3191,7 @@ static HRESULT WINAPI mfattributes_SetUINT64(IMFAttributes *iface, REFGUID key, 
     return attributes_SetUINT64(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_SetDouble(IMFAttributes *iface, REFGUID key, double value)
+HRESULT WINAPI mfattributes_SetDouble(IMFAttributes *iface, REFGUID key, double value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3199,7 +3200,7 @@ static HRESULT WINAPI mfattributes_SetDouble(IMFAttributes *iface, REFGUID key, 
     return attributes_SetDouble(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_SetGUID(IMFAttributes *iface, REFGUID key, REFGUID value)
+HRESULT WINAPI mfattributes_SetGUID(IMFAttributes *iface, REFGUID key, REFGUID value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3208,7 +3209,7 @@ static HRESULT WINAPI mfattributes_SetGUID(IMFAttributes *iface, REFGUID key, RE
     return attributes_SetGUID(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_SetString(IMFAttributes *iface, REFGUID key, const WCHAR *value)
+HRESULT WINAPI mfattributes_SetString(IMFAttributes *iface, REFGUID key, const WCHAR *value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3217,7 +3218,7 @@ static HRESULT WINAPI mfattributes_SetString(IMFAttributes *iface, REFGUID key, 
     return attributes_SetString(attributes, key, value);
 }
 
-static HRESULT WINAPI mfattributes_SetBlob(IMFAttributes *iface, REFGUID key, const UINT8 *buf, UINT32 size)
+HRESULT WINAPI mfattributes_SetBlob(IMFAttributes *iface, REFGUID key, const UINT8 *buf, UINT32 size)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3226,7 +3227,7 @@ static HRESULT WINAPI mfattributes_SetBlob(IMFAttributes *iface, REFGUID key, co
     return attributes_SetBlob(attributes, key, buf, size);
 }
 
-static HRESULT WINAPI mfattributes_SetUnknown(IMFAttributes *iface, REFGUID key, IUnknown *unknown)
+HRESULT WINAPI mfattributes_SetUnknown(IMFAttributes *iface, REFGUID key, IUnknown *unknown)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3235,7 +3236,7 @@ static HRESULT WINAPI mfattributes_SetUnknown(IMFAttributes *iface, REFGUID key,
     return attributes_SetUnknown(attributes, key, unknown);
 }
 
-static HRESULT WINAPI mfattributes_LockStore(IMFAttributes *iface)
+HRESULT WINAPI mfattributes_LockStore(IMFAttributes *iface)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3244,7 +3245,7 @@ static HRESULT WINAPI mfattributes_LockStore(IMFAttributes *iface)
     return attributes_LockStore(attributes);
 }
 
-static HRESULT WINAPI mfattributes_UnlockStore(IMFAttributes *iface)
+HRESULT WINAPI mfattributes_UnlockStore(IMFAttributes *iface)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3253,7 +3254,7 @@ static HRESULT WINAPI mfattributes_UnlockStore(IMFAttributes *iface)
     return attributes_UnlockStore(attributes);
 }
 
-static HRESULT WINAPI mfattributes_GetCount(IMFAttributes *iface, UINT32 *count)
+HRESULT WINAPI mfattributes_GetCount(IMFAttributes *iface, UINT32 *count)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3262,7 +3263,7 @@ static HRESULT WINAPI mfattributes_GetCount(IMFAttributes *iface, UINT32 *count)
     return attributes_GetCount(attributes, count);
 }
 
-static HRESULT WINAPI mfattributes_GetItemByIndex(IMFAttributes *iface, UINT32 index, GUID *key, PROPVARIANT *value)
+HRESULT WINAPI mfattributes_GetItemByIndex(IMFAttributes *iface, UINT32 index, GUID *key, PROPVARIANT *value)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -3271,7 +3272,7 @@ static HRESULT WINAPI mfattributes_GetItemByIndex(IMFAttributes *iface, UINT32 i
     return attributes_GetItemByIndex(attributes, index, key, value);
 }
 
-static HRESULT WINAPI mfattributes_CopyAllItems(IMFAttributes *iface, IMFAttributes *dest)
+HRESULT WINAPI mfattributes_CopyAllItems(IMFAttributes *iface, IMFAttributes *dest)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
 
@@ -6298,10 +6299,9 @@ static HRESULT resolver_get_bytestream_url_hint(IMFByteStream *stream, WCHAR con
     return S_OK;
 }
 
-static HRESULT resolver_create_gstreamer_handler(IMFByteStreamHandler **handler)
+static HRESULT resolver_create_default_handler(IMFByteStreamHandler **handler)
 {
-    static const GUID CLSID_GStreamerByteStreamHandler = {0x317df618, 0x5e5a, 0x468a, {0x9f, 0x15, 0xd8, 0x27, 0xa9, 0xa0, 0x81, 0x62}};
-    return CoCreateInstance(&CLSID_GStreamerByteStreamHandler, NULL, CLSCTX_INPROC_SERVER, &IID_IMFByteStreamHandler, (void **)handler);
+    return CoCreateInstance(&CLSID_MPEG4ByteStreamHandlerPlugin, NULL, CLSCTX_INPROC_SERVER, &IID_IMFByteStreamHandler, (void **)handler);
 }
 
 static HRESULT resolver_get_bytestream_handler(IMFByteStream *stream, const WCHAR *url, DWORD flags,
@@ -6337,12 +6337,14 @@ static HRESULT resolver_get_bytestream_handler(IMFByteStream *stream, const WCHA
        this handler for all possible types.
      */
 
+    TRACE( "url_ext %s mimeW %s\n", debugstr_w(url_ext), debugstr_w(mimeW) );
+
     if (url_ext || mimeW)
     {
         hr = resolver_create_bytestream_handler(stream, flags, mimeW, url_ext, handler);
 
         if (FAILED(hr))
-            hr = resolver_create_gstreamer_handler(handler);
+            hr = resolver_create_default_handler(handler);
     }
 
     CoTaskMemFree(mimeW);
@@ -6360,7 +6362,7 @@ static HRESULT resolver_get_bytestream_handler(IMFByteStream *stream, const WCHA
     hr = resolver_create_bytestream_handler(stream, flags, NULL, url_ext, handler);
 
     if (FAILED(hr))
-        hr = resolver_create_gstreamer_handler(handler);
+        hr = resolver_create_default_handler(handler);
 
     return hr;
 }
@@ -9222,8 +9224,15 @@ static const IMFDXGIDeviceManagerVtbl dxgi_device_manager_vtbl =
 HRESULT WINAPI MFCreateDXGIDeviceManager(UINT *token, IMFDXGIDeviceManager **manager)
 {
     struct dxgi_device_manager *object;
+    const char *do_not_create = getenv("WINE_DO_NOT_CREATE_DXGI_DEVICE_MANAGER");
 
     TRACE("%p, %p.\n", token, manager);
+
+    if (do_not_create && do_not_create[0] != '\0')
+    {
+        FIXME("stubbing out\n");
+        return E_NOTIMPL;
+    }
 
     if (!token || !manager)
         return E_POINTER;

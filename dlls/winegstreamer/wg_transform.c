@@ -114,7 +114,7 @@ static void align_video_info_planes(MFVideoInfo *video_info, gsize plane_align,
     align->padding_right = ((plane_align + 1) - (info->width & plane_align)) & plane_align;
     align->padding_bottom = ((plane_align + 1) - (info->height & plane_align)) & plane_align;
 
-    if (!is_mf_video_area_empty(aperture))
+    if (!is_mf_video_area_empty(aperture) && !plane_align)
     {
         align->padding_right = max(align->padding_right, video_info->dwWidth - aperture->OffsetX.value - aperture->Area.cx);
         align->padding_bottom = max(align->padding_bottom, video_info->dwHeight - aperture->OffsetY.value - aperture->Area.cy);
@@ -508,6 +508,73 @@ static GstCaps *transform_get_parsed_caps(GstCaps *caps, const char *media_type)
     return parsed_caps;
 }
 
+static GstBuffer *caps_get_buffer(const GstCaps *caps, const char *name, UINT32 *buffer_size)
+{
+    const GstStructure *structure = gst_caps_get_structure(caps, 0);
+    const GValue *buffer_value;
+
+    if ((buffer_value = gst_structure_get_value(structure, name)))
+    {
+        GstBuffer *buffer = gst_value_get_buffer(buffer_value);
+        *buffer_size = gst_buffer_get_size(buffer);
+        return buffer;
+    }
+
+    *buffer_size = 0;
+    return NULL;
+}
+
+static void push_vorbis_headers(struct wg_transform *transform)
+{
+    const uint8_t *ptr, *beg, *end;
+    GstBuffer *codec_data, *hdr;
+    UINT32 codec_data_size;
+    GstBufferMapInfo info;
+    int i, count, len;
+
+    if (!(codec_data = caps_get_buffer(transform->input_caps, "codec_data",
+            &codec_data_size)) || !codec_data_size) return;
+    gst_buffer_map(codec_data, &info, GST_MAP_READ);
+    ptr = info.data;
+    end = ptr + info.size;
+
+    for (len = 0, i = 0, count = *ptr++; ptr < end && i < count; i++)
+    {
+        while (ptr < end && *ptr++ == 0xff) len += 0xff;
+        len += ptr[-1];
+        GST_DEBUG("buffer %d: %u bytes", i, len);
+    }
+    if (len > end - ptr) goto failed;
+    beg = ptr;
+    ptr = info.data;
+
+    GST_DEBUG("%u stream headers, total length=%u bytes", count + 1, codec_data_size);
+    for (len = 0, i = 0, count = *ptr++; ptr < end && i < count; i++, len = 0)
+    {
+        while (ptr < end && *ptr++ == 0xff) len += 0xff;
+        len += ptr[-1];
+
+        if (!(hdr = gst_buffer_new_memdup(beg, len))) break;
+        GST_DEBUG("buffer %d: %u bytes", i, len);
+        GST_BUFFER_FLAG_SET(hdr, GST_BUFFER_FLAG_HEADER);
+        GST_MEMDUMP("data", beg, len);
+        gst_pad_push(transform->my_src, hdr);
+        beg += len;
+    }
+
+    if ((hdr = gst_buffer_new_memdup(beg, end - beg)))
+    {
+        GST_DEBUG("buffer %d: %zu bytes", i, end - beg);
+        GST_MEMDUMP("data", beg, end - beg);
+        GST_BUFFER_FLAG_SET(hdr, GST_BUFFER_FLAG_HEADER);
+        gst_pad_push(transform->my_src, hdr);
+    }
+
+failed:
+    gst_buffer_unmap(codec_data, &info);
+}
+
+
 static bool transform_create_decoder_elements(struct wg_transform *transform,
         const gchar *input_mime, const gchar *output_mime, GstElement **first, GstElement **last)
 {
@@ -517,7 +584,10 @@ static bool transform_create_decoder_elements(struct wg_transform *transform,
     char *str;
 
     if (!strcmp(input_mime, "audio/x-raw") || !strcmp(input_mime, "video/x-raw"))
+    {
+        transform->attrs.input_queue_length = 16;
         return true;
+    }
 
     if (!(parsed_caps = transform_get_parsed_caps(transform->input_caps, input_mime)))
         return false;
@@ -651,6 +721,9 @@ NTSTATUS wg_transform_create(void *args)
     GST_INFO("transform %p input caps %"GST_PTR_FORMAT, transform, transform->input_caps);
     input_mime = gst_structure_get_name(gst_caps_get_structure(transform->input_caps, 0));
 
+    if (!strcmp(input_mime, "video/x-h264"))
+        touch_h264_used_tag();
+
     if (!(transform->output_caps = caps_from_media_type(&params->output_type)))
         goto out;
     GST_INFO("transform %p output caps %"GST_PTR_FORMAT, transform, transform->output_caps);
@@ -712,6 +785,20 @@ NTSTATUS wg_transform_create(void *args)
             || !push_event(transform->my_src, event))
         goto out;
 
+    /* Check that the caps event have been accepted */
+    if (!strcmp(input_mime, "video/x-h264"))
+    {
+        GstPad *peer;
+        if (!(peer = gst_pad_get_peer(transform->my_src)))
+            goto out;
+        else if (!gst_pad_has_current_caps(peer))
+        {
+            gst_object_unref(peer);
+            goto out;
+        }
+        gst_object_unref(peer);
+    }
+
     /* We need to use GST_FORMAT_TIME here because it's the only format
      * some elements such avdec_wmav2 correctly support. */
     gst_segment_init(&transform->segment, GST_FORMAT_TIME);
@@ -720,6 +807,9 @@ NTSTATUS wg_transform_create(void *args)
     if (!(event = gst_event_new_segment(&transform->segment))
             || !push_event(transform->my_src, event))
         goto out;
+
+    if (!strcmp(input_mime, "audio/x-vorbis"))
+        push_vorbis_headers(transform);
 
     GST_INFO("Created winegstreamer transform %p.", transform);
     params->transform = (wg_transform_t)(ULONG_PTR)transform;
@@ -1046,12 +1136,38 @@ static bool sample_needs_buffer_copy(struct wg_sample *sample, GstBuffer *buffer
     return needs_copy;
 }
 
+static void fill_frame_padded_bits(GstBuffer *buffer, const GstVideoAlignment *align, const GstVideoInfo *info)
+{
+    guint i, plane, padded_height, height, stride, padding = align->padding_bottom;
+    GstVideoFrame frame;
+
+    if (!padding || !gst_video_frame_map(&frame, info, buffer, GST_MAP_WRITE)) return;
+
+    /* Windows uses the data in the last scanline for its bottom padding */
+    for (plane = 0; plane < GST_VIDEO_FRAME_N_PLANES(&frame); plane++)
+    {
+        guint8 *data = GST_VIDEO_FRAME_PLANE_DATA(&frame, plane);
+        gint comp[GST_VIDEO_MAX_COMPONENTS];
+
+        gst_video_format_info_component(frame.info.finfo, plane, comp);
+        padded_height = GST_VIDEO_FORMAT_INFO_SCALE_HEIGHT(frame.info.finfo, comp[0], info->height + padding);
+        height = GST_VIDEO_FRAME_COMP_HEIGHT(&frame, comp[0]);
+        stride = GST_VIDEO_FRAME_PLANE_STRIDE(&frame, plane);
+        data += height * stride;
+
+        for (i = 0; i < padded_height - height; i++) memcpy(data + i * stride, data - stride, stride);
+    }
+
+    gst_video_frame_unmap(&frame);
+}
+
 static NTSTATUS read_transform_output_video(struct wg_sample *sample, GstBuffer *buffer,
-        GstVideoInfo *src_video_info, GstVideoInfo *dst_video_info)
+        const GstVideoInfo *src_video_info, const GstVideoInfo *dst_video_info, const GstVideoAlignment *align)
 {
     gsize total_size;
     NTSTATUS status;
     bool needs_copy;
+    const char *sgi;
 
     if (!(needs_copy = sample_needs_buffer_copy(sample, buffer, &total_size)))
         status = STATUS_SUCCESS;
@@ -1064,6 +1180,9 @@ static NTSTATUS read_transform_output_video(struct wg_sample *sample, GstBuffer 
         sample->size = 0;
         return status;
     }
+
+    if ((sgi = getenv("SteamGameId")) && !strcmp(sgi, "1449280"))
+        fill_frame_padded_bits(buffer, align, dst_video_info);
 
     set_sample_flags_from_buffer(sample, buffer, total_size);
 
@@ -1223,7 +1342,7 @@ NTSTATUS wg_transform_read_data(void *args)
 
     if (!strcmp(output_mime, "video/x-raw"))
         status = read_transform_output_video(sample, output_buffer,
-                &src_video_info, &dst_video_info);
+                &src_video_info, &dst_video_info, &align);
     else
         status = read_transform_output(sample, output_buffer);
 
