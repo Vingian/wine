@@ -44,6 +44,7 @@ struct vulkan_client_object
 
 #include "wine/vulkan.h"
 #include "wine/rbtree.h"
+#include "wine/list.h"
 
 /* Wine internal vulkan driver version, needs to be bumped upon vulkan_funcs changes. */
 #define WINE_VULKAN_DRIVER_VERSION 36
@@ -78,6 +79,7 @@ struct vulkan_instance
 #undef USE_VK_FUNC
     void (*p_insert_object)( struct vulkan_instance *instance, struct vulkan_object *obj );
     void (*p_remove_object)( struct vulkan_instance *instance, struct vulkan_object *obj );
+    uint32_t api_version;
 };
 
 static inline struct vulkan_instance *vulkan_instance_from_handle( VkInstance handle )
@@ -90,6 +92,7 @@ struct vulkan_physical_device
 {
     VULKAN_OBJECT_HEADER( VkPhysicalDevice, physical_device );
     struct vulkan_instance *instance;
+    uint32_t api_version;
 };
 
 static inline struct vulkan_physical_device *vulkan_physical_device_from_handle( VkPhysicalDevice handle )
@@ -98,6 +101,12 @@ static inline struct vulkan_physical_device *vulkan_physical_device_from_handle(
     return (struct vulkan_physical_device *)(UINT_PTR)client->unix_handle;
 }
 
+struct local_timeline_semaphore
+{
+    VkSemaphore sem;
+    uint64_t value;
+};
+
 struct vulkan_device
 {
     VULKAN_OBJECT_HEADER( VkDevice, device );
@@ -105,6 +114,21 @@ struct vulkan_device
 #define USE_VK_FUNC(x) PFN_ ## x p_ ## x;
     ALL_VK_DEVICE_FUNCS
 #undef USE_VK_FUNC
+    uint64_t queue_count;
+    struct vulkan_queue *queues;
+    VkQueueFamilyProperties *queue_props;
+
+    pthread_t signaller_thread;
+    pthread_mutex_t signaller_mutex;
+    BOOL stop;
+    struct list free_fence_ops_list;
+    struct list sem_poll_list;
+    struct local_timeline_semaphore sem_poll_update;
+    pthread_cond_t sem_poll_updated_cond;
+    uint64_t sem_poll_update_value; /* set to sem_poll_update.value by signaller thread once update is processed. */
+    unsigned int allocated_fence_ops_count;
+
+    BOOL keyed_mutexes_enabled;
 };
 
 static inline struct vulkan_device *vulkan_device_from_handle( VkDevice handle )
@@ -117,6 +141,9 @@ struct vulkan_queue
 {
     VULKAN_OBJECT_HEADER( VkQueue, queue );
     struct vulkan_device *device;
+    uint32_t family_index;
+    uint32_t queue_index;
+    VkDeviceQueueCreateFlags flags;
 };
 
 static inline struct vulkan_queue *vulkan_queue_from_handle( VkQueue handle )
@@ -144,6 +171,17 @@ struct vulkan_swapchain
 static inline struct vulkan_swapchain *vulkan_swapchain_from_handle( VkSwapchainKHR handle )
 {
     return (struct vulkan_swapchain *)(UINT_PTR)handle;
+}
+
+struct vulkan_semaphore
+{
+    VULKAN_OBJECT_HEADER( VkSemaphore, semaphore );
+    BOOL d3d12_fence;
+};
+
+static inline struct vulkan_semaphore *vulkan_semaphore_from_handle( VkSemaphore handle )
+{
+    return (struct vulkan_semaphore *)(UINT_PTR)handle;
 }
 
 struct vulkan_funcs
