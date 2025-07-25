@@ -3,7 +3,7 @@
 #GH_REPO=''
 #GH_TOKEN=''
 
-STAGING_EXCLUDE='-W ntdll-ForceBottomUpAlloc'
+STAGING_EXCLUDE='-W ntdll-ForceBottomUpAlloc -W ntdll-Hide_Wine_Exports'
 
 WINE_VERSION=($(curl -s 'https://gitlab.winehq.org/api/v4/projects/5/releases' | jq -r '.[0].tag_name' 2>/dev/null | grep -o '[0-9.]*'))
 STAGING_VERSION=($(curl -s 'https://gitlab.winehq.org/api/v4/projects/231/repository/tags' | jq -r '.[0].name' 2>/dev/null | grep -o '[0-9.]*'))
