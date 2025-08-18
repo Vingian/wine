@@ -111,7 +111,6 @@ static const struct object_ops apc_reserve_ops =
     no_satisfied,               /* satisfied */
     no_signal,                  /* signal */
     no_get_fd,                  /* get_fd */
-    default_get_sync,           /* get_sync */
     default_map_access,         /* map_access */
     default_get_sd,             /* get_sd */
     default_set_sd,             /* set_sd */
@@ -121,6 +120,7 @@ static const struct object_ops apc_reserve_ops =
     default_unlink_name,        /* unlink_name */
     no_open_file,               /* open_file */
     no_kernel_obj_list,         /* get_kernel_obj_list */
+    no_get_inproc_sync,         /* get_inproc_sync */
     no_close_handle,            /* close_handle */
     no_destroy                  /* destroy */
 };
@@ -136,7 +136,6 @@ static const struct object_ops completion_reserve_ops =
     no_satisfied,              /* satisfied */
     no_signal,                 /* signal */
     no_get_fd,                 /* get_fd */
-    default_get_sync,          /* get_sync */
     default_map_access,        /* map_access */
     default_get_sd,            /* get_sd */
     default_set_sd,            /* set_sd */
@@ -146,6 +145,7 @@ static const struct object_ops completion_reserve_ops =
     default_unlink_name,       /* unlink_name */
     no_open_file,              /* open_file */
     no_kernel_obj_list,        /* get_kernel_obj_list */
+    no_get_inproc_sync,        /* get_inproc_sync */
     no_close_handle,           /* close_handle */
     no_destroy                 /* destroy */
 };
@@ -642,9 +642,9 @@ struct fd *no_get_fd( struct object *obj )
     return NULL;
 }
 
-struct object *default_get_sync( struct object *obj )
+int no_get_inproc_sync( struct object *obj, enum inproc_sync_type *type )
 {
-    return grab_object( obj );
+    return -1;
 }
 
 unsigned int default_map_access( struct object *obj, unsigned int access )
