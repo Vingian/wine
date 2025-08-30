@@ -398,6 +398,25 @@ static struct x11drv_win_data *alloc_win_data( Display *display, HWND hwnd )
     return data;
 }
 
+static BOOL is_actual_window_rect_mapped(const struct x11drv_win_data *data)
+{
+    XWindowAttributes attr;
+    Window child;
+    RECT rect;
+    POINT pt;
+    int x, y;
+
+    /* Query the X server for the actual position of the window,
+       as some WMs tend to mess with it, so we need to make sure
+       we aren't unmapping the window wrongly with a bogus rect */
+    XTranslateCoordinates(data->display, data->whole_window, root_window, 0, 0, &x, &y, &child);
+    XGetWindowAttributes(data->display, data->whole_window, &attr);
+
+    pt = root_to_virtual_screen(x - attr.x, y - attr.y);
+    SetRect(&rect, pt.x, pt.y, pt.x + attr.width, pt.y + attr.height);
+    return is_window_rect_mapped(&rect);
+}
+
 
 /***********************************************************************
  *		is_window_managed
@@ -457,7 +476,7 @@ static unsigned long get_mwm_decorations_for_style( DWORD style, DWORD ex_style 
     unsigned long ret = 0;
 
     if (ex_style & WS_EX_TOOLWINDOW) return 0;
-    if (ex_style & WS_EX_LAYERED) return 0;
+    if ((ex_style & (WS_EX_LAYERED | WS_EX_COMPOSITED)) == WS_EX_LAYERED) return 0;
 
     if ((style & WS_CAPTION) == WS_CAPTION)
     {
@@ -2683,6 +2702,10 @@ BOOL X11DRV_CreateWindow( HWND hwnd )
         struct x11drv_thread_data *data = x11drv_init_thread_data();
         XSetWindowAttributes attr;
 
+        /* listen to raw xinput event in the desktop window thread */
+        data->xinput2_rawinput = TRUE;
+        x11drv_xinput2_enable( data->display, DefaultRootWindow( data->display ) );
+
         /* create the cursor clipping window */
         attr.override_redirect = TRUE;
         attr.event_mask = StructureNotifyMask | FocusChangeMask;
@@ -3189,7 +3212,8 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, HWND owner_hint, UIN
     if (old_style & WS_VISIBLE)
     {
         if (((swp_flags & SWP_HIDEWINDOW) && !(new_style & WS_VISIBLE)) ||
-            (!(new_style & WS_MINIMIZE) && !is_window_rect_mapped( &new_rects->window ) && is_window_rect_mapped( &old_rects.window )))
+            (!(new_style & WS_MINIMIZE) && !is_window_rect_mapped( &new_rects->window ) && is_window_rect_mapped( &old_rects.window ) &
+            !is_actual_window_rect_mapped( data )))
         {
             window_set_wm_state( data, WithdrawnState, FALSE );
             release_win_data( data );
@@ -3227,8 +3251,9 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, HWND owner_hint, UIN
             BOOL needs_map = TRUE;
 
             /* layered windows are mapped only once their attributes are set */
-            if (NtUserGetWindowLongW( hwnd, GWL_EXSTYLE ) & WS_EX_LAYERED)
+            if ((NtUserGetWindowLongW( hwnd, GWL_EXSTYLE ) & (WS_EX_LAYERED | WS_EX_COMPOSITED)) == WS_EX_LAYERED)
                 needs_map = data->layered || IsRectEmpty( &new_rects->window );
+
             release_win_data( data );
             if (needs_icon) fetch_icon_data( hwnd, 0, 0 );
             if (needs_map) map_window( hwnd, new_style, activate );
