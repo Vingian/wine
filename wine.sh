@@ -71,6 +71,18 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 		popd > /dev/null
 	fi
 
+	if grep -q '/\* queue an async procedure call \*/' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/esync/esync-unix-mainline.patch && pushd wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/esync > /dev/null; then
+		sed -i '/if (apc->sync) release_object( apc->sync );/a \     reserve_obj_unbind( apc->reserve );' esync-unix-mainline.patch
+		sed -i '/\/\* queue an async procedure call \*\//d' esync-unix-mainline.patch
+		popd > /dev/null
+	fi
+
+	if grep -q '/\* queue an async procedure call \*/' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/esync/esync-unix-staging.patch && pushd wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/esync > /dev/null; then
+		sed -i '/if (apc->sync) release_object( apc->sync );/a \     reserve_obj_unbind( apc->reserve );' esync-unix-staging.patch
+		sed -i '/\/\* queue an async procedure call \*\//d' esync-unix-staging.patch
+		popd > /dev/null
+	fi
+
 	if [ -z "$HAVE_WINE_VERSION" ]; then
 		cp -r wine-staging wine-tkg-git/wine-tkg-git/src/wine-staging-git
 		cp -r wine wine-tkg-git/wine-tkg-git/src/wine-git
