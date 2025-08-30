@@ -19,6 +19,8 @@
 #include "vkd3d_utils_private.h"
 #undef D3D12CreateDevice
 
+/* VKD3D_DEBUG_ENV_NAME("VKD3D_DEBUG"); */
+
 static const char *debug_d3d_blob_part(D3D_BLOB_PART part)
 {
     switch (part)
@@ -269,7 +271,7 @@ HRESULT WINAPI D3DCompile2VKD3D(const void *data, SIZE_T data_size, const char *
 
     option = &options[0];
     option->name = VKD3D_SHADER_COMPILE_OPTION_API_VERSION;
-    option->value = VKD3D_SHADER_API_VERSION_1_17;
+    option->value = VKD3D_SHADER_API_VERSION_CURRENT;
 
     compile_info.type = VKD3D_SHADER_STRUCTURE_TYPE_COMPILE_INFO;
     compile_info.next = &preprocess_info;
@@ -433,7 +435,7 @@ HRESULT WINAPI D3DPreprocess(const void *data, SIZE_T size, const char *filename
 
     static const struct vkd3d_shader_compile_option options[] =
     {
-        {VKD3D_SHADER_COMPILE_OPTION_API_VERSION, VKD3D_SHADER_API_VERSION_1_17},
+        {VKD3D_SHADER_COMPILE_OPTION_API_VERSION, VKD3D_SHADER_API_VERSION_CURRENT},
     };
 
     TRACE("data %p, size %"PRIuPTR", filename %s, macros %p, include %p, preprocessed_blob %p, messages_blob %p.\n",
@@ -979,7 +981,7 @@ HRESULT WINAPI D3DDisassemble(const void *data, SIZE_T data_size,
 
     static const struct vkd3d_shader_compile_option options[] =
     {
-        {VKD3D_SHADER_COMPILE_OPTION_API_VERSION, VKD3D_SHADER_API_VERSION_1_17},
+        {VKD3D_SHADER_COMPILE_OPTION_API_VERSION, VKD3D_SHADER_API_VERSION_CURRENT},
     };
 
     TRACE("data %p, data_size %"PRIuPTR", flags %#x, comments %p, blob %p.\n",

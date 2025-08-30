@@ -1701,6 +1701,33 @@ e = err.number
 on error goto 0
 ok e = 9, "e = " & e ' VBSE_OUT_OF_BOUNDS, can only change rightmost dimension
 
+' Redim without Dim should work, even in explicit mode
+redim toCreateArr(3)
+ok ubound(toCreateArr) = 3, "ubound(toCreateArr) = " & ubound(toCreateArr)
+toCreateArr(3) = 10
+ok toCreateArr(3) = 10, "toCreateArr(3) = " & toCreateArr(3)
+
+on error resume next
+const redimConst = 3
+redim redimConst(3)
+' REF_CONST -> runtime error: Type mismatch: 'redimConst'
+ok err.number = 501, "redim <const> err.number = " & err.number
+err.clear
+redim err(3)
+' REF_DISP -> runtime error: Object doesn't support this property or method
+ok err.number = 501, "redim <err> err.number = " & err.number
+err.clear
+' TODO where should we put this compilation error test?
+' Sub redimSub
+' End Sub
+' redim redimSub(3)
+' ' REF_FUNC -> compilation error: Name redefined
+' todo_wine_ok err.number = -1, "redim <sub> err.number = " & err.number
+' err.clear
+' ' TODO how do we test the REF_OBJ case?
+on error goto 0
+
+
 sub TestReDimFixed
     on error resume next
 
@@ -2283,5 +2310,23 @@ f1 1 = (1)
 f1 not 1 = 0
 
 arr (0) = 2 xor -2
+
+function wmi_array_bstr()
+const HKEY_LOCAL_MACHINE = &H80000002
+Dim oReg
+
+Set oReg = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
+
+Dim strKeyPath, strSubkey, arrSubKeys
+strKeyPath = "Software\Microsoft\NET Framework Setup\NDP"
+oReg.EnumKey HKEY_LOCAL_MACHINE, strKeyPath, arrSubKeys
+
+Call ok(getVT(arrSubKeys) = "VT_ARRAY|VT_VARIANT*", "getVT(arrSubKeys) = " & getVT(arrSubKeys))
+For Each strSubkey In arrSubKeys
+Next
+end function
+
+Call wmi_array_bstr()
+
 
 reportSuccess()

@@ -187,6 +187,11 @@ static const char *vt2a(VARIANT *v)
         sprintf(buf, "%s*", vt2a(V_BYREF(v)));
         return buf;
     }
+    else if(V_VT(v) == (VT_BYREF|VT_VARIANT|VT_ARRAY)) {
+        static char buf[64];
+        sprintf(buf, "%s*", vt2a(V_BYREF(v)));
+        return buf;
+    }
 
     switch(V_VT(v)) {
     case VT_EMPTY:
@@ -2765,6 +2770,18 @@ static void test_parse_errors(void)
             "    throwInt &h87001234&\n"
             "end if\n",
             2, 1
+        },
+        {
+            /* redim of sub on windows fails with
+               compilation error: Name redefined
+               TODO how can we validate that this code throws a "compilation error: Name redefined"?
+               TODO this code fails even without the compile.c redim collision check???
+                 but somehow the commented part in lang.vbs would not fail???
+            */
+            "sub redimSub\n"
+            "end sub\n"
+            L"redim redimSub(3)\n",
+             2, 0
         }
     };
     HRESULT hres;
