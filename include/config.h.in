@@ -198,6 +198,9 @@
 /* Define to 1 if you have the <linux/major.h> header file. */
 #undef HAVE_LINUX_MAJOR_H
 
+/* Define to 1 if you have the <linux/ntsync.h> header file. */
+#undef HAVE_LINUX_NTSYNC_H
+
 /* Define to 1 if you have the <linux/param.h> header file. */
 #undef HAVE_LINUX_PARAM_H
 
@@ -309,7 +312,7 @@
 /* Define to 1 if you have the <net/route.h> header file. */
 #undef HAVE_NET_ROUTE_H
 
-/* Define to 1 if you have the <OpenCL/opencl.h> header file. */
+/* Define to 1 if you have the <CL/opencl.h> header file. */
 #undef HAVE_OPENCL_OPENCL_H
 
 /* Define to 1 if 'numaudioengines' is a member of 'oss_sysinfo'. */
