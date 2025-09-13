@@ -96,6 +96,7 @@ UNSUPPORTED_EXTENSIONS = [
     "VK_AMD_display_native_hdr",
     "VK_EXT_full_screen_exclusive",
     "VK_GOOGLE_display_timing",
+    "VK_KHR_external_fence_win32",
     # Relates to external_semaphore and needs type conversions in bitflags.
     "VK_KHR_maintenance7", # Causes infinity recursion in struct convert code
     "VK_KHR_shared_presentable_image", # Needs WSI work.
@@ -106,9 +107,13 @@ UNSUPPORTED_EXTENSIONS = [
     "VK_NV_external_compute_queue", # Has a new dispatchable handle
 
     # Extensions for other platforms
+    "VK_EXT_external_memory_dma_buf",
+    "VK_EXT_image_drm_format_modifier",
     "VK_EXT_metal_objects",
     "VK_EXT_physical_device_drm",
     "VK_GOOGLE_surfaceless_query",
+    "VK_KHR_external_fence_fd",
+    "VK_EXT_external_memory_metal",
     "VK_SEC_amigo_profiling", # Angle specific.
 
     # Extensions which require callback handling
@@ -126,13 +131,7 @@ UNEXPOSED_EXTENSIONS = {
     "VK_EXT_map_memory_placed",
     "VK_EXT_headless_surface",
     # Extensions for other platforms
-    "VK_EXT_external_memory_dma_buf",
-    "VK_EXT_image_drm_format_modifier",
     "VK_EXT_metal_surface",
-    "VK_KHR_external_fence_fd",
-    "VK_KHR_external_memory_fd",
-    "VK_EXT_external_memory_metal",
-    "VK_KHR_external_semaphore_fd",
     "VK_KHR_wayland_surface",
     "VK_KHR_xlib_surface",
     "VK_MVK_macos_surface",
@@ -187,78 +186,93 @@ FUNCTION_OVERRIDES = {
 
     # Instance functions
     "vkCreateDevice" : {"extra_param" : "client_ptr"},
+    "vkGetPhysicalDeviceExternalBufferProperties" : {"dispatch" : True},
+    "vkGetPhysicalDeviceExternalFenceProperties" : {"dispatch" : False},
+    "vkGetPhysicalDeviceExternalSemaphoreProperties" : {"dispatch" : True},
 
     # Device functions
     "vkCreateCommandPool" : {"extra_param" : "client_ptr"},
     "vkGetDeviceProcAddr" : {"dispatch" : False},
+    "vkAllocateMemory" : {"dispatch" : True},
+    "vkGetSemaphoreCounterValue" : {"dispatch" : True},
+    "vkSignalSemaphore" : {"dispatch" : True},
+    "vkWaitSemaphores" : {"dispatch" : True},
+    "vkQueueBindSparse" : {"dispatch" : True},
+    "vkQueueSubmit" : {"dispatch" : True},
+    "vkQueueSubmit2" : {"dispatch" : True},
+    "vkDestroySemaphore" : {"dispatch" : True},
+
+    # VK_KHR_external_fence_capabilities
+    "vkGetPhysicalDeviceExternalFencePropertiesKHR" : {"dispatch" : False},
+
+    # VK_KHR_external_memory_capabilities
+    "vkGetPhysicalDeviceExternalBufferPropertiesKHR" : {"dispatch" : True},
+
+    # VK_KHR_external_semaphore_capabilities
+    "vkGetPhysicalDeviceExternalSemaphorePropertiesKHR" : {"dispatch" : True},
+
+    # VK_KHR_external_semaphore_win32
+    "vkCreateSemaphore" : {"dispatch" : True },
+    "vkGetSemaphoreWin32HandleKHR" : {"dispatch" : True},
+    "vkImportSemaphoreWin32HandleKHR" : {"dispatch" : True},
+
+    # VK_KHR_external_memory_win32
+    "vkGetMemoryWin32HandleKHR" : {"dispatch" : True},
+    "vkGetMemoryWin32HandlePropertiesKHR" : {"dispatch" : True},
+
+    # VK_KHR_timeline_semaphore
+    "vkGetSemaphoreCounterValueKHR" : {"dispatch" : True},
+    "vkSignalSemaphoreKHR" : {"dispatch" : True},
+    "vkWaitSemaphoresKHR" : {"dispatch" : True},
+
+    # VK_KHR_synchronization2
+    "vkQueueSubmit2KHR" : {"dispatch" : True},
+
+    # Custom functions
+    "wine_vkAcquireKeyedMutex" : {"dispatch": True},
+    "wine_vkReleaseKeyedMutex" : {"dispatch": True},
 }
 
 # functions for which a user driver entry must be generated
 USER_DRIVER_FUNCS = {
     "vkAcquireNextImage2KHR",
     "vkAcquireNextImageKHR",
-    "vkAllocateMemory",
-    "vkCreateBuffer",
-    "vkCreateFence",
-    "vkCreateImage",
-    "vkCreateSemaphore",
     "vkCreateSwapchainKHR",
     "vkCreateWin32SurfaceKHR",
-    "vkDestroyFence",
-    "vkDestroySemaphore",
     "vkDestroySurfaceKHR",
     "vkDestroySwapchainKHR",
-    "vkFreeMemory",
-    "vkGetDeviceBufferMemoryRequirements",
-    "vkGetDeviceBufferMemoryRequirementsKHR",
-    "vkGetDeviceImageMemoryRequirements",
     "vkGetDeviceProcAddr",
-    "vkGetFenceWin32HandleKHR",
     "vkGetInstanceProcAddr",
-    "vkGetMemoryWin32HandleKHR",
-    "vkGetMemoryWin32HandlePropertiesKHR",
-    "vkGetPhysicalDeviceExternalBufferProperties",
-    "vkGetPhysicalDeviceExternalBufferPropertiesKHR",
-    "vkGetPhysicalDeviceExternalFenceProperties",
-    "vkGetPhysicalDeviceExternalFencePropertiesKHR",
-    "vkGetPhysicalDeviceExternalSemaphoreProperties",
-    "vkGetPhysicalDeviceExternalSemaphorePropertiesKHR",
-    "vkGetPhysicalDeviceImageFormatProperties2",
-    "vkGetPhysicalDeviceImageFormatProperties2KHR",
     "vkGetPhysicalDevicePresentRectanglesKHR",
     "vkGetPhysicalDeviceSurfaceCapabilities2KHR",
     "vkGetPhysicalDeviceSurfaceCapabilitiesKHR",
     "vkGetPhysicalDeviceSurfaceFormats2KHR",
     "vkGetPhysicalDeviceSurfaceFormatsKHR",
     "vkGetPhysicalDeviceWin32PresentationSupportKHR",
-    "vkGetSemaphoreWin32HandleKHR",
-    "vkImportFenceWin32HandleKHR",
-    "vkImportSemaphoreWin32HandleKHR",
-    "vkMapMemory",
-    "vkMapMemory2KHR",
     "vkQueuePresentKHR",
-    "vkQueueSubmit",
-    "vkQueueSubmit2",
-    "vkQueueSubmit2KHR",
-    "vkUnmapMemory",
-    "vkUnmapMemory2KHR",
 }
 
 # functions for which the unix thunk is manually implemented
 MANUAL_UNIX_THUNKS = {
     "vkAllocateCommandBuffers",
+    "vkAllocateMemory",
+    "vkCreateBuffer",
     "vkCreateCommandPool",
     "vkCreateDebugReportCallbackEXT",
     "vkCreateDebugUtilsMessengerEXT",
     "vkCreateDeferredOperationKHR",
     "vkCreateDevice",
+    "vkCreateImage",
     "vkCreateInstance",
+    "vkCreateSemaphore",
     "vkDestroyCommandPool",
     "vkDestroyDebugReportCallbackEXT",
     "vkDestroyDebugUtilsMessengerEXT",
     "vkDestroyDeferredOperationKHR",
     "vkDestroyDevice",
     "vkDestroyInstance",
+    "vkGetSemaphoreWin32HandleKHR",
+    "vkImportSemaphoreWin32HandleKHR",
     "vkEnumerateDeviceExtensionProperties",
     "vkEnumerateDeviceLayerProperties",
     "vkEnumerateInstanceExtensionProperties",
@@ -268,16 +282,43 @@ MANUAL_UNIX_THUNKS = {
     "vkEnumeratePhysicalDeviceGroupsKHR",
     "vkEnumeratePhysicalDevices",
     "vkFreeCommandBuffers",
+    "vkFreeMemory",
     "vkGetCalibratedTimestampsEXT",
     "vkGetCalibratedTimestampsKHR",
     "vkGetDeviceProcAddr",
+    "vkGetMemoryWin32HandleKHR",
+    "vkGetMemoryWin32HandlePropertiesKHR",
     "vkGetDeviceQueue",
     "vkGetDeviceQueue2",
     "vkGetInstanceProcAddr",
     "vkGetPhysicalDeviceCalibrateableTimeDomainsEXT",
     "vkGetPhysicalDeviceCalibrateableTimeDomainsKHR",
+    "vkGetPhysicalDeviceExternalBufferProperties",
+    "vkGetPhysicalDeviceExternalBufferPropertiesKHR",
     "vkGetPhysicalDeviceExternalFenceProperties",
     "vkGetPhysicalDeviceExternalFencePropertiesKHR",
+    "vkGetPhysicalDeviceExternalSemaphoreProperties",
+    "vkGetPhysicalDeviceExternalSemaphorePropertiesKHR",
+    "vkGetPhysicalDeviceImageFormatProperties2",
+    "vkGetPhysicalDeviceImageFormatProperties2KHR",
+    "vkMapMemory",
+    "vkMapMemory2KHR",
+    "vkUnmapMemory",
+    "vkUnmapMemory2KHR",
+    "vkGetSemaphoreCounterValue",
+    "vkSignalSemaphore",
+    "vkWaitSemaphores",
+    "vkQueueBindSparse",
+    "vkQueueSubmit",
+    "vkQueueSubmit2",
+    "vkDestroySemaphore",
+    "vkGetSemaphoreCounterValueKHR",
+    "vkSignalSemaphoreKHR",
+    "vkWaitSemaphoresKHR",
+    "vkQueueSubmit2KHR",
+    # Custom functions
+    "wine_vkAcquireKeyedMutex",
+    "wine_vkReleaseKeyedMutex",
 }
 
 # loader functions which are entirely manually implemented
@@ -304,23 +345,23 @@ MANUAL_LOADER_THUNKS = {
 }
 
 STRUCT_CHAIN_CONVERSIONS = {
-    # Force making copies of some struct chains
-    "VkMemoryAllocateInfo": {},
-    "VkBufferCreateInfo": {},
-    "VkImageCreateInfo": {},
-    "VkPhysicalDeviceExternalBufferInfo": {},
-    "VkPhysicalDeviceImageFormatInfo2": {},
-    "VkCommandBufferSubmitInfo": {},
-    "VkSemaphoreCreateInfo": {},
-    "VkSemaphoreSubmitInfo": {},
-    "VkFenceCreateInfo": {},
-    "VkSubmitInfo": {},
-    "VkSubmitInfo2": {},
-
     # Ignore to not confuse host loader.
-    "VkDeviceCreateInfo": {"strip": ["VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO"]},
-    "VkInstanceCreateInfo": {"strip": ["VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO"]},
+    "VkDeviceCreateInfo": ["VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO"],
+    "VkInstanceCreateInfo": ["VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO"],
+
+    # Structs which require pNext chain modification
+    "VkBufferCreateInfo": [],
+    "VkImageCreateInfo": [],
+    "VkMemoryAllocateInfo": [],
+    "VkPhysicalDeviceImageFormatInfo2": [],
+    "VkPhysicalDeviceExternalSemaphoreInfo": [],
+    "VkSemaphoreCreateInfo": [],
+    "VkSubmitInfo": [],
+    "VkSubmitInfo2": [],
+    "VkBindSparseInfo" : [],
 }
+
+STRUCT_COPY = {};
 
 # Some struct members are conditionally ignored and callers are free to leave them uninitialized.
 # We can't deduce that from XML, so we allow expressing it here.
@@ -786,7 +827,14 @@ class VkFunction(object):
         proto += ", ".join([p.definition() for p in self.params])
 
         if is_thunk and self.extra_param:
-            proto += ", void *" + self.extra_param
+            extra_param_is_new = True
+            for p in self.params:
+                if p.name == self.extra_param:
+                    extra_param_is_new = False
+            if extra_param_is_new:
+                proto += ", void *" + self.extra_param
+            else:
+                proto += ", void *win_" + self.extra_param
 
         proto += ")"
         return proto
@@ -873,7 +921,7 @@ class VkFunction(object):
             if conv:
                 params += ", UlongToPtr({0}{1})".format(params_prefix, self.extra_param)
             else:
-                params += ", {0}{1}".format(params_prefix, self.extra_param)
+                params += ", (void *){0}{1}".format(params_prefix, self.extra_param)
 
         if self.name in MANUAL_UNIX_THUNKS:
             func_prefix = "wine_"
@@ -953,9 +1001,12 @@ class VkFunction(object):
         if conv:
             thunk += "    struct\n"
             thunk += "    {\n"
+            extra_param_is_new = True
             for p in self.params:
                 thunk += "        {0};\n".format(p.definition(conv=True, is_member=True))
-            if self.extra_param:
+                if p.name == self.extra_param:
+                    extra_param_is_new = False
+            if self.extra_param and extra_param_is_new:
                 thunk += "        PTR32 {0};\n".format(self.extra_param)
             if self.type != "void":
                 thunk += "        {0} result;\n".format(self.type)
@@ -1062,7 +1113,7 @@ class VkHandle(object):
             # Should only happen for VkInstance
             return "vulkan_instance_from_handle({0})".format(param)
         elif self.name == "VkCommandBuffer":
-            return "vulkan_command_buffer_from_handle({0})->device".format(param)
+            return "wine_cmd_buffer_from_handle({0})->device".format(param)
         elif self.name == "VkDevice":
             return "vulkan_device_from_handle({0})".format(param)
         elif self.name == "VkPhysicalDevice":
@@ -1101,7 +1152,7 @@ class VkHandle(object):
         """ Provide access to the host handle of a wrapped object. """
 
         if self.name == "VkCommandBuffer":
-            return "vulkan_command_buffer_from_handle({0})->host.command_buffer".format(name)
+            return "wine_cmd_buffer_from_handle({0})->host.command_buffer".format(name)
         if self.name == "VkCommandPool":
             return "wine_cmd_pool_from_handle({0})->host.command_pool".format(name)
         if self.name == "VkDebugUtilsMessengerEXT":
@@ -1115,7 +1166,9 @@ class VkHandle(object):
         if self.name == "VkInstance":
             return "vulkan_instance_from_handle({0})->host.instance".format(name)
         if self.name == "VkDeviceMemory":
-            return "vulkan_device_memory_from_handle({0})->host.device_memory".format(name)
+            return "wine_device_memory_from_handle({0})->host.device_memory".format(name)
+        if self.name == "VkSemaphore":
+            return "vulkan_semaphore_from_handle({0})->host.semaphore".format(name)
         if self.name == "VkPhysicalDevice":
             return "vulkan_physical_device_from_handle({0})->host.physical_device".format(name)
         if self.name == "VkQueue":
@@ -1124,11 +1177,6 @@ class VkHandle(object):
             return "vulkan_surface_from_handle({0})->host.surface".format(name)
         if self.name == "VkSwapchainKHR":
             return "vulkan_swapchain_from_handle({0})->host.swapchain".format(name)
-        if self.name == "VkSemaphore":
-            return "vulkan_semaphore_from_handle({0})->host.semaphore".format(name)
-        if self.name == "VkFence":
-            return "vulkan_fence_from_handle({0})->host.fence".format(name)
-
         if self.is_dispatchable():
             LOGGER.error("Unhandled host handle for: {0}".format(self.name))
         return None
@@ -1136,7 +1184,8 @@ class VkHandle(object):
     def unwrap_handle(self, name, unwrap):
         if unwrap == Unwrap.HOST:
             return self.host_handle(name)
-        assert unwrap != Unwrap.NONE
+        if unwrap == Unwrap.NONE:
+            return name
         return None
 
     def is_wrapped(self):
@@ -1428,7 +1477,7 @@ class VkMember(VkVariable):
                         values=values, object_type=object_type, bit_width=bit_width, returnedonly=returnedonly,
                         parent=parent, selection=selection, selector=selector)
 
-    def copy(self, input, output, direction, conv, unwrap, parent_const, conversions):
+    def copy(self, input, output, direction, conv, unwrap, copy, parent_const, conversions):
         """ Helper method for use by conversion logic to generate a C-code statement to copy this member.
             - `conv` indicates whether the statement is in a struct alignment conversion path. """
 
@@ -1436,7 +1485,7 @@ class VkMember(VkVariable):
         suffix = convert_suffix(direction, win_type, unwrap, self.is_wrapped())
         is_const = self.is_const() if self.is_pointer() else parent_const
 
-        if self.needs_conversion(conv, unwrap, direction, False):
+        if self.needs_conversion(conv, unwrap, direction, False) and not copy:
             if self.is_dynamic_array():
                 # Array length is either a variable name (string) or an int.
                 count = self.get_dyn_array_len(input, conv)
@@ -1468,8 +1517,9 @@ class VkMember(VkVariable):
                     return "{0}{1} = {2} ? {3} : 0;\n".format(output, self.name, self.value(input, conv),
                         handle.unwrap_handle(self.value(input, conv), unwrap))
                 else:
-                    return "{0}{1} = {2};\n".format(output, self.name,
-                        handle.unwrap_handle(self.value(input, conv), unwrap))
+                    input_name = "{0}{1}".format(input, self.name)
+                    return "{0}{1} = {2} ? {3} : VK_NULL_HANDLE;\n".format(output, self.name,
+                        input_name, handle.unwrap_handle(self.value(input, conv), unwrap))
             elif self.is_generic_handle():
                 if direction == Direction.OUTPUT:
                     LOGGER.error("OUTPUT parameter {0}.{1} cannot be unwrapped".format(self.type, self.name))
@@ -1489,6 +1539,11 @@ class VkMember(VkVariable):
             for l in self.array_lens:
                 bytes_count = "{0} * ".format(l) + bytes_count
             return "memcpy({0}{1}, {2}{1}, {3});\n".format(output, self.name, input, bytes_count)
+        elif self.is_dynamic_array() and copy:
+            if self.type == "void":
+                return "MEMDUP_VOID(ctx, {0}{1}, {2}{1}, {3});\n".format(output, self.name, input, self.get_dyn_array_len(input, conv))
+            else:
+                return "MEMDUP(ctx, {0}{1}, {2}{1}, {3});\n".format(output, self.name, input, self.get_dyn_array_len(input, conv))
         elif conv and direction == Direction.OUTPUT and self.is_pointer():
             return "{0}{1} = PtrToUlong({2}{1});\n".format(output, self.name, input)
         elif conv and direction == Direction.INPUT and self.is_pointer():
@@ -1570,13 +1625,13 @@ class VkMember(VkVariable):
                 return True
 
         if self.is_handle():
-            if self.handle.is_wrapped() and self.is_dynamic_array():
+            if unwrap != Unwrap.NONE and self.handle.is_wrapped():
                 return True
-            if conv and self.handle.is_dispatchable() and self.is_static_array():
+            if conv and self.handle.is_dispatchable():
                 return True
-            return unwrap != Unwrap.NONE and self.handle.is_wrapped()
         elif self.is_generic_handle():
-            return unwrap != Unwrap.NONE
+            if unwrap != Unwrap.NONE:
+                return True
         elif self.is_struct() or self.is_union():
             if self.struct.needs_conversion(conv, unwrap, direction, is_const):
                 return True
@@ -2187,17 +2242,21 @@ class VkStruct(Sequence):
 
 
 class StructConversionFunction(object):
-    def __init__(self, struct, direction, conv, unwrap, const):
+    def __init__(self, struct, direction, conv, unwrap, const, copy=False):
         self.direction = direction
         self.operand = struct
         self.type = struct.name
         self.conv = conv
         self.unwrap = unwrap
         self.const = const
+        self.copy = copy
 
-        name = "convert_{0}_".format(self.type)
-        win_type = "win32" if self.conv else "win64"
-        name += convert_suffix(direction, win_type, unwrap, struct.is_wrapped())
+        if copy:
+            name = "copy_{0}".format(self.type)
+        else:
+            name = "convert_{0}_".format(self.type)
+            win_type = "win32" if self.conv else "win64"
+            name += convert_suffix(direction, win_type, unwrap, struct.is_wrapped())
         self.name = name
 
     def __eq__(self, other):
@@ -2229,7 +2288,7 @@ class StructConversionFunction(object):
 
         body = ""
 
-        if not self.conv:
+        if not self.conv and not self.copy:
             body += "#ifdef _WIN64\n"
 
         needs_alloc = self.direction != Direction.OUTPUT and self.operand.needs_alloc(self.conv, self.unwrap)
@@ -2239,8 +2298,11 @@ class StructConversionFunction(object):
         if self.direction == Direction.OUTPUT and self.const:
             win_type = "const " + win_type
 
-        if self.conv:
+        if self.copy:
+            body += "void {0}(".format(self.name)
+        else:
             body += "static void {0}(".format(self.name)
+        if self.conv:
 
             if self.direction == Direction.OUTPUT:
                 params = ["const {0} *in".format(self.type), "{0} *out".format(win_type)]
@@ -2257,8 +2319,6 @@ class StructConversionFunction(object):
             body += ")\n"
 
         else:
-            body += "static void {0}(".format(self.name)
-
             params = ["const {0} *in".format(self.type), "{0} *out".format(self.type)]
 
             # Generate parameter list
@@ -2270,8 +2330,6 @@ class StructConversionFunction(object):
         needs_extensions = self.operand.needs_extensions_conversion(self.conv, self.direction)
 
         if self.direction == Direction.OUTPUT and not any([any([self.member_needs_copy(ext, m) for m in ext]) for ext in self.operand.struct_extensions]):
-            needs_extensions = False
-        if len(self.operand.struct_extensions) == 0:
             needs_extensions = False
 
         body += "{\n"
@@ -2303,7 +2361,7 @@ class StructConversionFunction(object):
                 body += " || ".join("selector == {}".format(s) for s in m.selection)
                 body += ")\n    "
 
-            body += "    " + m.copy("in->", "out->", self.direction, self.conv, self.unwrap, self.const, conversions)
+            body += "    " + m.copy("in->", "out->", self.direction, self.conv, self.unwrap, self.copy, self.const, conversions)
 
         if needs_extensions:
             if self.conv and self.direction == Direction.INPUT:
@@ -2316,11 +2374,13 @@ class StructConversionFunction(object):
 
             ident = "            "
 
-            if self.direction == Direction.INPUT and self.type in STRUCT_CHAIN_CONVERSIONS \
-                    and "strip" in STRUCT_CHAIN_CONVERSIONS[self.type]:
-                for i in STRUCT_CHAIN_CONVERSIONS[self.type]["strip"]:
+            if self.direction == Direction.INPUT and self.type in STRUCT_CHAIN_CONVERSIONS:
+                has_any_chain_conversions = False
+                for i in STRUCT_CHAIN_CONVERSIONS[self.type]:
                     body += "        case {0}:\n".format(i)
-                body += ident + "break;\n"
+                    has_any_chain_conversions = True
+                if has_any_chain_conversions:
+                    body += ident + "break;\n"
 
             for ext in self.operand.struct_extensions:
                 if not ext.required:
@@ -2330,6 +2390,8 @@ class StructConversionFunction(object):
                     continue
 
                 stype = next(x for x in ext.members if x.name == "sType").values
+                if self.type in STRUCT_CHAIN_CONVERSIONS and stype in STRUCT_CHAIN_CONVERSIONS[self.type]:
+                    continue
                 win_type = ext.name + "32" if self.conv and ext.needs_win32_type() else ext.name
                 if self.direction == Direction.INPUT:
                     in_type = "const " + win_type
@@ -2358,7 +2420,7 @@ class StructConversionFunction(object):
                     if m.name == "pNext":
                         copy_body += ident + "out_ext->pNext = NULL;\n"
                         continue
-                    copy_body += ident + m.copy("in_ext->", "out_ext->", self.direction, self.conv, Unwrap.HOST, self.const, conversions)
+                    copy_body += ident + m.copy("in_ext->", "out_ext->", self.direction, self.conv, Unwrap.HOST, self.copy, self.const, conversions)
 
                 # Generate the definition of "in_ext" if we need it
                 if "in_ext->" in copy_body:
@@ -2373,7 +2435,18 @@ class StructConversionFunction(object):
 
             body += "        default:\n"
             if self.direction == Direction.INPUT:
-                body += ident + "FIXME(\"Unhandled sType %u.\\n\", in_header->sType);\n"
+                body += ident + "if ((in_header->sType >> 16) == 0x7ead)\n"
+                body += ident + "{\n"
+                body += ident + "    VkBaseOutStructure *out_ext = conversion_context_alloc(ctx, 32);\n";
+                body += ident + "    memcpy(out_ext, in_header, 32);\n";
+                body += ident + "    out_ext->pNext = NULL;\n";
+                body += ident + "    out_header->pNext = (void *)out_ext;\n";
+                body += ident + "    out_header = (void *)out_ext;\n";
+                body += ident + "}\n"
+                body += ident + "else\n"
+                body += ident + "{\n"
+                body += ident + "    FIXME(\"Unhandled sType %u.\\n\", in_header->sType);\n"
+                body += ident + "}\n"
             body += "            break;\n"
             body += "        }\n"
             body += "    }\n"
@@ -2382,7 +2455,7 @@ class StructConversionFunction(object):
             body += "        FIXME(\"Unexpected pNext\\n\");\n"
 
         body += "}\n"
-        if not self.conv:
+        if not self.conv and not self.copy:
             body += "#endif /* _WIN64 */\n"
         body += "\n"
 
@@ -2894,9 +2967,13 @@ class VkGenerator(object):
 
             f.write("struct {0}_params\n".format(vk_func.name))
             f.write("{\n");
+            extra_param_is_new = True
             for p in vk_func.params:
                 f.write("    {0};\n".format(p.definition(is_member=True)))
-            if vk_func.extra_param:
+                if p.name == vk_func.extra_param:
+                    extra_param_is_new = False
+
+            if vk_func.extra_param and extra_param_is_new:
                 f.write("    void *{0};\n".format(vk_func.extra_param))
             if vk_func.type != "void":
                 f.write("    {0} result;\n".format(vk_func.type))
@@ -3046,6 +3123,28 @@ class VkGenerator(object):
                 f.write(" \\\n    USE_VK_FUNC({0})".format(vk_func.name))
         f.write("\n\n")
 
+        f.write("typedef VkResult (*PFN_native_vkCreateInstance)(const VkInstanceCreateInfo *, const VkAllocationCallbacks *, VkInstance *,\n")
+        f.write("                                                       void * (*)(VkInstance, const char *), void *);\n");
+        f.write("typedef VkResult (*PFN_native_vkCreateDevice)(VkPhysicalDevice, const VkDeviceCreateInfo *, const VkAllocationCallbacks *, VkDevice *,\n");
+        f.write("                                                     void * (*)(VkInstance, const char *), void *);\n\n");
+        f.write("typedef struct VkCreateInfoWineDeviceCallback {\n");
+        f.write("    VkStructureType             sType;\n");
+        f.write("    const void*                 pNext;\n");
+        f.write("    PFN_native_vkCreateDevice   native_create_callback;\n");
+        f.write("    void*                       context;\n");
+        f.write("} VkCreateInfoWineDeviceCallback;\n");
+
+        f.write("#define VK_STRUCTURE_TYPE_CREATE_INFO_WINE_DEVICE_CALLBACK 2125312001\n");
+
+        f.write("typedef struct VkCreateInfoWineInstanceCallback {\n");
+        f.write("    VkStructureType             sType;\n");
+        f.write("    const void*                 pNext;\n");
+        f.write("    PFN_native_vkCreateInstance native_create_callback;\n");
+        f.write("    void*                       context;\n");
+        f.write("} VkCreateInfoWineInstanceCallback;\n");
+
+        f.write("#define VK_STRUCTURE_TYPE_CREATE_INFO_WINE_INSTANCE_CALLBACK 2125312002\n");
+
         f.write("#endif /* __WINE_VULKAN_H */\n")
 
     def generate_vulkan_spec(self, f):
@@ -3128,6 +3227,10 @@ class VkRegistry(object):
         self.video_copyright = video_root.find('./comment').text
 
         root.extend(video_root)
+
+        tree_custom = ET.parse("vk_custom.xml")
+        root_custom = tree_custom.getroot()
+        root.extend(root_custom)
 
         self._parse_enums(root)
         self._parse_types(root)

@@ -4999,18 +4999,6 @@ VkResult WINAPI vkGetFenceStatus(VkDevice device, VkFence fence)
     return params.result;
 }
 
-VkResult WINAPI vkGetFenceWin32HandleKHR(VkDevice device, const VkFenceGetWin32HandleInfoKHR *pGetWin32HandleInfo, HANDLE *pHandle)
-{
-    struct vkGetFenceWin32HandleKHR_params params;
-    NTSTATUS status;
-    params.device = device;
-    params.pGetWin32HandleInfo = pGetWin32HandleInfo;
-    params.pHandle = pHandle;
-    status = UNIX_CALL(vkGetFenceWin32HandleKHR, &params);
-    assert(!status && "vkGetFenceWin32HandleKHR");
-    return params.result;
-}
-
 VkResult WINAPI vkGetFramebufferTilePropertiesQCOM(VkDevice device, VkFramebuffer framebuffer, uint32_t *pPropertiesCount, VkTilePropertiesQCOM *pProperties)
 {
     struct vkGetFramebufferTilePropertiesQCOM_params params;
@@ -5230,6 +5218,31 @@ void WINAPI vkGetLatencyTimingsNV(VkDevice device, VkSwapchainKHR swapchain, VkG
     params.pLatencyMarkerInfo = pLatencyMarkerInfo;
     status = UNIX_CALL(vkGetLatencyTimingsNV, &params);
     assert(!status && "vkGetLatencyTimingsNV");
+}
+
+VkResult WINAPI vkGetMemoryFdKHR(VkDevice device, const VkMemoryGetFdInfoKHR *pGetFdInfo, int *pFd)
+{
+    struct vkGetMemoryFdKHR_params params;
+    NTSTATUS status;
+    params.device = device;
+    params.pGetFdInfo = pGetFdInfo;
+    params.pFd = pFd;
+    status = UNIX_CALL(vkGetMemoryFdKHR, &params);
+    assert(!status && "vkGetMemoryFdKHR");
+    return params.result;
+}
+
+VkResult WINAPI vkGetMemoryFdPropertiesKHR(VkDevice device, VkExternalMemoryHandleTypeFlagBits handleType, int fd, VkMemoryFdPropertiesKHR *pMemoryFdProperties)
+{
+    struct vkGetMemoryFdPropertiesKHR_params params;
+    NTSTATUS status;
+    params.device = device;
+    params.handleType = handleType;
+    params.fd = fd;
+    params.pMemoryFdProperties = pMemoryFdProperties;
+    status = UNIX_CALL(vkGetMemoryFdPropertiesKHR, &params);
+    assert(!status && "vkGetMemoryFdPropertiesKHR");
+    return params.result;
 }
 
 VkResult WINAPI vkGetMemoryHostPointerPropertiesEXT(VkDevice device, VkExternalMemoryHandleTypeFlagBits handleType, const void *pHostPointer, VkMemoryHostPointerPropertiesEXT *pMemoryHostPointerProperties)
@@ -6218,6 +6231,18 @@ VkResult WINAPI vkGetSemaphoreCounterValueKHR(VkDevice device, VkSemaphore semap
     return params.result;
 }
 
+VkResult WINAPI vkGetSemaphoreFdKHR(VkDevice device, const VkSemaphoreGetFdInfoKHR *pGetFdInfo, int *pFd)
+{
+    struct vkGetSemaphoreFdKHR_params params;
+    NTSTATUS status;
+    params.device = device;
+    params.pGetFdInfo = pGetFdInfo;
+    params.pFd = pFd;
+    status = UNIX_CALL(vkGetSemaphoreFdKHR, &params);
+    assert(!status && "vkGetSemaphoreFdKHR");
+    return params.result;
+}
+
 VkResult WINAPI vkGetSemaphoreWin32HandleKHR(VkDevice device, const VkSemaphoreGetWin32HandleInfoKHR *pGetWin32HandleInfo, HANDLE *pHandle)
 {
     struct vkGetSemaphoreWin32HandleKHR_params params;
@@ -6354,14 +6379,14 @@ VkResult WINAPI vkGetVideoSessionMemoryRequirementsKHR(VkDevice device, VkVideoS
     return params.result;
 }
 
-VkResult WINAPI vkImportFenceWin32HandleKHR(VkDevice device, const VkImportFenceWin32HandleInfoKHR *pImportFenceWin32HandleInfo)
+VkResult WINAPI vkImportSemaphoreFdKHR(VkDevice device, const VkImportSemaphoreFdInfoKHR *pImportSemaphoreFdInfo)
 {
-    struct vkImportFenceWin32HandleKHR_params params;
+    struct vkImportSemaphoreFdKHR_params params;
     NTSTATUS status;
     params.device = device;
-    params.pImportFenceWin32HandleInfo = pImportFenceWin32HandleInfo;
-    status = UNIX_CALL(vkImportFenceWin32HandleKHR, &params);
-    assert(!status && "vkImportFenceWin32HandleKHR");
+    params.pImportSemaphoreFdInfo = pImportSemaphoreFdInfo;
+    status = UNIX_CALL(vkImportSemaphoreFdKHR, &params);
+    assert(!status && "vkImportSemaphoreFdKHR");
     return params.result;
 }
 
@@ -7127,6 +7152,31 @@ VkResult WINAPI vkWriteMicromapsPropertiesEXT(VkDevice device, uint32_t micromap
     return params.result;
 }
 
+VkResult WINAPI wine_vkAcquireKeyedMutex(VkDevice device, VkDeviceMemory memory, uint64_t key, uint32_t timeout_ms)
+{
+    struct wine_vkAcquireKeyedMutex_params params;
+    NTSTATUS status;
+    params.device = device;
+    params.memory = memory;
+    params.key = key;
+    params.timeout_ms = timeout_ms;
+    status = UNIX_CALL(wine_vkAcquireKeyedMutex, &params);
+    assert(!status && "wine_vkAcquireKeyedMutex");
+    return params.result;
+}
+
+VkResult WINAPI wine_vkReleaseKeyedMutex(VkDevice device, VkDeviceMemory memory, uint64_t key)
+{
+    struct wine_vkReleaseKeyedMutex_params params;
+    NTSTATUS status;
+    params.device = device;
+    params.memory = memory;
+    params.key = key;
+    status = UNIX_CALL(wine_vkReleaseKeyedMutex, &params);
+    assert(!status && "wine_vkReleaseKeyedMutex");
+    return params.result;
+}
+
 static const struct vulkan_func vk_device_dispatch_table[] =
 {
     {"vkAcquireNextImage2KHR", vkAcquireNextImage2KHR},
@@ -7595,7 +7645,6 @@ static const struct vulkan_func vk_device_dispatch_table[] =
     {"vkGetEncodedVideoSessionParametersKHR", vkGetEncodedVideoSessionParametersKHR},
     {"vkGetEventStatus", vkGetEventStatus},
     {"vkGetFenceStatus", vkGetFenceStatus},
-    {"vkGetFenceWin32HandleKHR", vkGetFenceWin32HandleKHR},
     {"vkGetFramebufferTilePropertiesQCOM", vkGetFramebufferTilePropertiesQCOM},
     {"vkGetGeneratedCommandsMemoryRequirementsEXT", vkGetGeneratedCommandsMemoryRequirementsEXT},
     {"vkGetGeneratedCommandsMemoryRequirementsNV", vkGetGeneratedCommandsMemoryRequirementsNV},
@@ -7615,6 +7664,8 @@ static const struct vulkan_func vk_device_dispatch_table[] =
     {"vkGetImageViewHandleNVX", vkGetImageViewHandleNVX},
     {"vkGetImageViewOpaqueCaptureDescriptorDataEXT", vkGetImageViewOpaqueCaptureDescriptorDataEXT},
     {"vkGetLatencyTimingsNV", vkGetLatencyTimingsNV},
+    {"vkGetMemoryFdKHR", vkGetMemoryFdKHR},
+    {"vkGetMemoryFdPropertiesKHR", vkGetMemoryFdPropertiesKHR},
     {"vkGetMemoryHostPointerPropertiesEXT", vkGetMemoryHostPointerPropertiesEXT},
     {"vkGetMemoryWin32HandleKHR", vkGetMemoryWin32HandleKHR},
     {"vkGetMemoryWin32HandlePropertiesKHR", vkGetMemoryWin32HandlePropertiesKHR},
@@ -7645,6 +7696,7 @@ static const struct vulkan_func vk_device_dispatch_table[] =
     {"vkGetSamplerOpaqueCaptureDescriptorDataEXT", vkGetSamplerOpaqueCaptureDescriptorDataEXT},
     {"vkGetSemaphoreCounterValue", vkGetSemaphoreCounterValue},
     {"vkGetSemaphoreCounterValueKHR", vkGetSemaphoreCounterValueKHR},
+    {"vkGetSemaphoreFdKHR", vkGetSemaphoreFdKHR},
     {"vkGetSemaphoreWin32HandleKHR", vkGetSemaphoreWin32HandleKHR},
     {"vkGetShaderBinaryDataEXT", vkGetShaderBinaryDataEXT},
     {"vkGetShaderInfoAMD", vkGetShaderInfoAMD},
@@ -7656,7 +7708,7 @@ static const struct vulkan_func vk_device_dispatch_table[] =
     {"vkGetTensorViewOpaqueCaptureDescriptorDataARM", vkGetTensorViewOpaqueCaptureDescriptorDataARM},
     {"vkGetValidationCacheDataEXT", vkGetValidationCacheDataEXT},
     {"vkGetVideoSessionMemoryRequirementsKHR", vkGetVideoSessionMemoryRequirementsKHR},
-    {"vkImportFenceWin32HandleKHR", vkImportFenceWin32HandleKHR},
+    {"vkImportSemaphoreFdKHR", vkImportSemaphoreFdKHR},
     {"vkImportSemaphoreWin32HandleKHR", vkImportSemaphoreWin32HandleKHR},
     {"vkInitializePerformanceApiINTEL", vkInitializePerformanceApiINTEL},
     {"vkInvalidateMappedMemoryRanges", vkInvalidateMappedMemoryRanges},
@@ -7721,6 +7773,8 @@ static const struct vulkan_func vk_device_dispatch_table[] =
     {"vkWaitSemaphoresKHR", vkWaitSemaphoresKHR},
     {"vkWriteAccelerationStructuresPropertiesKHR", vkWriteAccelerationStructuresPropertiesKHR},
     {"vkWriteMicromapsPropertiesEXT", vkWriteMicromapsPropertiesEXT},
+    {"wine_vkAcquireKeyedMutex", wine_vkAcquireKeyedMutex},
+    {"wine_vkReleaseKeyedMutex", wine_vkReleaseKeyedMutex},
 };
 
 static const struct vulkan_func vk_phys_dev_dispatch_table[] =
