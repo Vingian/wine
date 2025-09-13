@@ -38,6 +38,8 @@
 #include <intrin.h>
 #endif
 
+#define VKD3D_SHADER_API_VERSION_CURRENT VKD3D_SHADER_API_VERSION_1_17
+
 #ifndef ARRAY_SIZE
 # define ARRAY_SIZE(x) (sizeof(x) / sizeof(*(x)))
 #endif
@@ -279,7 +281,7 @@ static inline unsigned int vkd3d_popcount(unsigned int v)
 {
 #ifdef _MSC_VER
     return __popcnt(v);
-#elif defined(__MINGW32__)
+#elif defined(HAVE_BUILTIN_POPCOUNT)
     return __builtin_popcount(v);
 #else
     v -= (v >> 1) & 0x55555555;
