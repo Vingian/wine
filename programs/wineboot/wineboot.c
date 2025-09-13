@@ -68,6 +68,7 @@
 #include <winternl.h>
 #include <ddk/wdm.h>
 #include <sddl.h>
+#include <ntsecapi.h>
 #include <wine/svcctl.h>
 #include <wine/list.h>
 #include <wine/asm.h>
@@ -78,6 +79,7 @@
 #include <shlwapi.h>
 #include <shellapi.h>
 #include <setupapi.h>
+#include <wininet.h>
 #include <newdev.h>
 #include "resource.h"
 
@@ -812,16 +814,116 @@ static void create_hardware_registry_keys(void)
     free( buf );
 }
 
+struct dyndata_enum_key{
+    WCHAR id[9];
+    WCHAR hardwarekey[64];
+    char  problem[4];
+    char  status[4];
+    char  allocation[12];
+    char  child[4];
+    char  sibling[4];
+    char  parent[4];
+};
+
+static struct dyndata_enum_key predefined_enums[] =
+{
+    {
+        {'C','2','9','A','2','3','D','0',0},
+        {'H','T','R','E','E','\\','R','O','O','T','\\','0',0},
+        {0x00, 0x00, 0x00, 0x00},
+        {0x4e, 0x08, 0x08, 0x1a},
+        {0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+        {0x40, 0x5a, 0x9a, 0xc2},
+        {0x00, 0x00, 0x00, 0x00},
+        {0x00, 0x00, 0x00, 0x00}
+    },
+    {
+        {'C','2','9','A','5','A','4','0',0},
+        {'H','T','R','E','E','\\','R','E','S','E','R','V','E','D','\\','0',0},
+        {0x00, 0x00, 0x00, 0x00},
+        {0x4e, 0x08, 0x08, 0x18},
+        {0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+        {0x00, 0x00, 0x00, 0x00},
+        {0x60, 0x5c, 0x9a, 0xc2},
+        {0xd0, 0x23, 0x9a, 0xc2}
+    },
+    {
+        {'C','2','9','A','5','C','6','0',0},
+        {'R','O','O','T','\\','N','E','T','\\','0','0','0','0',0},
+        {0x00, 0x00, 0x00, 0x00},
+        {0x4f, 0x6a, 0x08, 0x18},
+        {0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+        {0xf0, 0x93, 0x9b, 0xc2},
+        {0xc0, 0x5d, 0x9a, 0xc2},
+        {0xd0, 0x23, 0x9a, 0xc2}
+    },
+    {
+        {'C','2','9','A','5','D','C','0',0},
+        {'R','O','O','T','\\','P','R','O','C','E','S','S','O','R','_','U','P','D','A','T','E','\\','0','0','0','0',0},
+        {0x00, 0x00, 0x00, 0x00},
+        {0xcf, 0x6a, 0x88, 0x19},
+        {0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+        {0x00, 0x00, 0x00, 0x00},
+        {0x20, 0x5f, 0x9a, 0xc2},
+        {0xd0, 0x23, 0x9a, 0xc2}
+    },
+    {
+        {'C','2','9','A','5','F','2','0',0},
+        {'R','O','O','T','\\','S','W','E','N','U','M','\\','0','0','0','0',0},
+        {0x00, 0x00, 0x00, 0x00},
+        {0xcf, 0x6a, 0x88, 0x19},
+        {0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+        {0x00, 0x00, 0x00, 0x00},
+        {0x20, 0x5f, 0x9a, 0xc2},
+        {0xd0, 0x23, 0x9a, 0xc2}
+    }
+};
+
+/* add entry to HKEY_DYN_DATA\Config Manager\Enum */
+static void add_dynamic_enum_keys(HKEY key, struct dyndata_enum_key *entry)
+{
+    static const WCHAR HardWareKeyW[] = {'H','a','r','d','W','a','r','e','K','e','y',0};
+    static const WCHAR ProblemW[]     = {'P','r','o','b','l','e','m',0};
+    static const WCHAR StatusW[]      = {'S','t','a','t','u','s',0};
+    static const WCHAR AllocationW[]  = {'A','l','l','o','c','a','t','i','o','n',0};
+    static const WCHAR ChildW[]       = {'C','h','i','l','d',0};
+    static const WCHAR SiblingW[]     = {'S','i','b','l','i','n','g',0};
+    static const WCHAR ParentW[]      = {'P','a','r','e','n','t',0};
+
+    HKEY subkey;
+
+    if (!entry)
+        return;
+
+    if (RegCreateKeyExW( key, entry->id, 0, NULL, 0, KEY_WRITE, NULL, &subkey, NULL ))
+        return;
+
+    set_reg_value( subkey, HardWareKeyW, entry->hardwarekey );
+    RegSetValueExW( subkey, ProblemW,    0, REG_BINARY, (const BYTE *)entry->problem,    sizeof(entry->problem) );
+    RegSetValueExW( subkey, StatusW,     0, REG_BINARY, (const BYTE *)entry->status,     sizeof(entry->status) );
+    RegSetValueExW( subkey, AllocationW, 0, REG_BINARY, (const BYTE *)entry->allocation, sizeof(entry->allocation) );
+    RegSetValueExW( subkey, ChildW,      0, REG_BINARY, (const BYTE *)entry->child,      sizeof(entry->child) );
+    RegSetValueExW( subkey, SiblingW,    0, REG_BINARY, (const BYTE *)entry->sibling,    sizeof(entry->sibling) );
+    RegSetValueExW( subkey, ParentW,     0, REG_BINARY, (const BYTE *)entry->parent,     sizeof(entry->parent) );
+
+    RegCloseKey( subkey );
+}
 
 /* create the DynData registry keys */
 static void create_dynamic_registry_keys(void)
 {
     HKEY key;
+    int entry;
 
     if (!RegCreateKeyExW( HKEY_DYN_DATA, L"PerfStats\\StatData", 0, NULL, 0, KEY_WRITE, NULL, &key, NULL ))
         RegCloseKey( key );
     if (!RegCreateKeyExW( HKEY_DYN_DATA, L"Config Manager\\Enum", 0, NULL, 0, KEY_WRITE, NULL, &key, NULL ))
+    {
+        for (entry = 0; entry < sizeof(predefined_enums) / sizeof(predefined_enums[0]); entry++)
+            add_dynamic_enum_keys( key, &predefined_enums[entry] );
+
         RegCloseKey( key );
+    }
 }
 
 /* create the ComputerName registry keys */
@@ -1051,6 +1153,13 @@ static void create_known_dlls(void)
     RegCloseKey( key );
 }
 
+
+static void create_proxy_settings(void)
+{
+    HINTERNET inet;
+    inet = InternetOpenA( "Wine", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0 );
+    if (inet) InternetCloseHandle( inet );
+}
 
 /* Performs the rename operations dictated in %SystemRoot%\Wininit.ini.
  * Returns FALSE if there was an error, or otherwise if all is ok.
@@ -1622,6 +1731,43 @@ static void update_user_profile(void)
     LocalFree(sid);
 }
 
+static void update_win_version(void)
+{
+    static const WCHAR win10_buildW[] = L"18363";
+
+    HKEY cv_h;
+    DWORD type, sz;
+    WCHAR current_version[256];
+
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion",
+                0, KEY_ALL_ACCESS, &cv_h) == ERROR_SUCCESS){
+        /* get the current windows version */
+        sz = sizeof(current_version);
+        if(RegQueryValueExW(cv_h, L"CurrentVersion", NULL, &type, (BYTE *)current_version, &sz) == ERROR_SUCCESS &&
+                type == REG_SZ){
+            if(!wcscmp(current_version, L"10.0")){
+                RegSetValueExW(cv_h, L"CurrentBuild", 0, REG_SZ, (const BYTE *)win10_buildW, sizeof(win10_buildW));
+                RegSetValueExW(cv_h, L"CurrentBuildNumber", 0, REG_SZ, (const BYTE *)win10_buildW, sizeof(win10_buildW));
+            }
+        }
+        RegCloseKey(cv_h);
+    }
+
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\Wow6432Node\\Microsoft\\Windows NT\\CurrentVersion",
+                0, KEY_ALL_ACCESS, &cv_h) == ERROR_SUCCESS){
+        /* get the current windows version */
+        sz = sizeof(current_version);
+        if(RegQueryValueExW(cv_h, L"CurrentVersion", NULL, &type, (BYTE *)current_version, &sz) == ERROR_SUCCESS &&
+                type == REG_SZ){
+            if(!wcscmp(current_version, L"10.0")){
+                RegSetValueExW(cv_h, L"CurrentBuild", 0, REG_SZ, (const BYTE *)win10_buildW, sizeof(win10_buildW));
+                RegSetValueExW(cv_h, L"CurrentBuildNumber", 0, REG_SZ, (const BYTE *)win10_buildW, sizeof(win10_buildW));
+            }
+        }
+        RegCloseKey(cv_h);
+    }
+}
+
 /* execute rundll32 on the wine.inf file if necessary */
 static void update_wineprefix( BOOL force )
 {
@@ -1676,6 +1822,7 @@ static void update_wineprefix( BOOL force )
         }
         install_root_pnp_devices();
         update_user_profile();
+        update_win_version();
 
         TRACE( "wine: configuration in %s has been updated.\n", debugstr_w(prettyprint_configdir()) );
     }
@@ -1775,6 +1922,52 @@ static void usage( int status )
     WINE_MESSAGE( "    -s,--shutdown     Shutdown only, don't reboot\n" );
     WINE_MESSAGE( "    -u,--update       Update the wineprefix directory\n" );
     exit( status );
+}
+
+static void create_digitalproductid(void)
+{
+    BYTE digital_product_id[0xa4];
+    char product_id[256];
+    LSTATUS status;
+    unsigned int i;
+    DWORD size;
+    DWORD type;
+    HKEY key;
+
+    if ((status = RegOpenKeyExW( HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion",
+                       0, KEY_ALL_ACCESS, &key )))
+        return;
+    size = sizeof(product_id);
+    status = RegQueryValueExA( key, "ProductId", NULL, &type, (BYTE *)product_id, &size );
+    if (status) goto done;
+    if (!size) goto done;
+    if (product_id[size - 1])
+    {
+        if (size == sizeof(product_id)) goto done;
+        product_id[size++] = 0;
+    }
+
+    if (!RegQueryValueExA( key, "DigitalProductId", NULL, &type, NULL, &size ) && size == sizeof(digital_product_id))
+    {
+        if (RegQueryValueExA( key, "DigitalProductId", NULL, &type, digital_product_id, &size ))
+            goto done;
+        for (i = 0; i < size; ++i)
+            if (digital_product_id[i]) break;
+        if (i < size) goto done;
+    }
+
+    memset( digital_product_id, 0, sizeof(digital_product_id) );
+    *(DWORD *)digital_product_id = sizeof(digital_product_id);
+    digital_product_id[4] = 3;
+    strcpy( (char *)digital_product_id + 8, product_id );
+    *(DWORD *)(digital_product_id + 0x20) = 0x0cec;
+    *(DWORD *)(digital_product_id + 0x34) = 0x0cec;
+    strcpy( (char *)digital_product_id + 0x24, "[TH] X19-99481" );
+    digital_product_id[0x42] = 8;
+    RtlGenRandom( digital_product_id + 0x38, 0x18 );
+    RegSetValueExA( key, "DigitalProductId", 0, REG_BINARY, digital_product_id, sizeof(digital_product_id) );
+done:
+    RegCloseKey( key );
 }
 
 int __cdecl main( int argc, char *argv[] )
@@ -1890,8 +2083,10 @@ int __cdecl main( int argc, char *argv[] )
     }
     if (init || update) update_wineprefix( update );
 
+    create_digitalproductid();
     create_volatile_environment_registry_key();
     create_known_dlls();
+    create_proxy_settings();
 
     ProcessRunKeys( HKEY_LOCAL_MACHINE, L"RunOnce", TRUE, TRUE );
 

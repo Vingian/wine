@@ -31,6 +31,7 @@
 #include "ole2.h"
 #include "msxml.h"
 #include "msxml2.h"
+#include "msxml6.h"
 #include "xmlparser.h"
 
 /* undef the #define in msxml2 so that we can access the v.2 version
@@ -42,8 +43,6 @@
 #include "msxml_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(msxml);
-
-extern GUID CLSID_XMLSchemaCache60;
 
 typedef HRESULT (*ClassFactoryCreateInstanceFunc)(void**);
 typedef HRESULT (*DOMFactoryCreateInstanceFunc)(MSXML_VERSION, void**);
@@ -280,6 +279,7 @@ static HRESULT DOMClassFactory_Create(const GUID *clsid, REFIID riid, void **ppv
 
 static ClassFactory xmldoccf = { { &ClassFactoryVtbl }, XMLDocument_create };
 static ClassFactory httpreqcf = { { &ClassFactoryVtbl }, XMLHTTPRequest_create };
+static ClassFactory httpreqcf2 = { { &ClassFactoryVtbl }, XMLHTTPRequest2_create };
 static ClassFactory serverhttp = { { &ClassFactoryVtbl }, ServerXMLHTTP_create };
 static ClassFactory xsltemplatecf = { { &ClassFactoryVtbl }, XSLTemplate_create };
 static ClassFactory mxnsmanagercf = { {&ClassFactoryVtbl }, MXNamespaceManager_create };
@@ -340,6 +340,10 @@ HRESULT WINAPI DllGetClassObject( REFCLSID rclsid, REFIID riid, void **ppv )
              IsEqualCLSID( rclsid, &CLSID_XMLHTTP60 ))
     {
         cf = &httpreqcf.IClassFactory_iface;
+    }
+    else if( IsEqualCLSID( rclsid, &CLSID_FreeThreadedXMLHTTP60 ))
+    {
+        cf = &httpreqcf2.IClassFactory_iface;
     }
     else if( IsEqualCLSID( rclsid, &CLSID_ServerXMLHTTP ) ||
              IsEqualCLSID( rclsid, &CLSID_ServerXMLHTTP30 ) ||

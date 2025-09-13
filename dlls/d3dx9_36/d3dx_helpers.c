@@ -140,6 +140,7 @@ static const struct
     { &GUID_WICPixelFormat2bppIndexed, D3DX_PIXEL_FORMAT_P2_UINT },
     { &GUID_WICPixelFormat4bppIndexed, D3DX_PIXEL_FORMAT_P4_UINT },
     { &GUID_WICPixelFormat8bppGray,    D3DX_PIXEL_FORMAT_L8_UNORM },
+    { &GUID_WICPixelFormat16bppGray,   D3DX_PIXEL_FORMAT_R16_UNORM },
     { &GUID_WICPixelFormat16bppBGR555, D3DX_PIXEL_FORMAT_B5G5R5X1_UNORM },
     { &GUID_WICPixelFormat16bppBGR565, D3DX_PIXEL_FORMAT_B5G6R5_UNORM },
     { &GUID_WICPixelFormat24bppBGR,    D3DX_PIXEL_FORMAT_B8G8R8_UNORM },
@@ -289,8 +290,8 @@ static enum d3dx_pixel_format_id d3dx_pixel_format_id_from_dds_pixel_format(cons
 {
     uint32_t i;
 
-    TRACE("pixel_format: size %lu, flags %#lx, fourcc %#lx, bpp %lu.\n", pixel_format->size,
-            pixel_format->flags, pixel_format->fourcc, pixel_format->bpp);
+    TRACE("pixel_format: size %lu, flags %#lx, fourcc %s, bpp %lu.\n", pixel_format->size,
+            pixel_format->flags, debugstr_fourcc(pixel_format->fourcc), pixel_format->bpp);
     TRACE("rmask %#lx, gmask %#lx, bmask %#lx, amask %#lx.\n", pixel_format->rmask, pixel_format->gmask,
             pixel_format->bmask, pixel_format->amask);
 
@@ -1150,6 +1151,20 @@ static HRESULT d3dx_initialize_image_from_dds(const void *src_data, uint32_t src
 
         if ((image->format = d3dx_pixel_format_id_from_dds_pixel_format(&header->pixel_format)) == D3DX_PIXEL_FORMAT_COUNT)
             return D3DXERR_INVALIDDATA;
+
+        switch (image->format)
+        {
+        case D3DX_PIXEL_FORMAT_DXT1_UNORM:
+        case D3DX_PIXEL_FORMAT_DXT2_UNORM:
+        case D3DX_PIXEL_FORMAT_DXT3_UNORM:
+        case D3DX_PIXEL_FORMAT_DXT4_UNORM:
+        case D3DX_PIXEL_FORMAT_DXT5_UNORM:
+            image->format  = D3DX_PIXEL_FORMAT_R8G8B8A8_UNORM;
+            break;
+        default:
+            /* Leave format as is */
+            break;
+        }
 
         image->image_file_format = D3DX_IMAGE_FILE_FORMAT_DDS;
         image->layer_count = 1;

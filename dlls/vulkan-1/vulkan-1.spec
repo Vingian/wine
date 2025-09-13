@@ -276,3 +276,5 @@
 @ stdcall vkUpdateDescriptorSets(ptr long ptr long ptr) winevulkan.vkUpdateDescriptorSets
 @ stdcall vkWaitForFences(ptr long ptr long int64) winevulkan.vkWaitForFences
 @ stdcall vkWaitSemaphores(ptr ptr int64) winevulkan.vkWaitSemaphores
+@ stdcall wine_vkAcquireKeyedMutex(ptr int64 int64 long) winevulkan.wine_vkAcquireKeyedMutex
+@ stdcall wine_vkReleaseKeyedMutex(ptr int64 int64) winevulkan.wine_vkReleaseKeyedMutex
