@@ -120,6 +120,11 @@ enum vkd3d_shader_structure_type
      * \since 1.15
      */
     VKD3D_SHADER_STRUCTURE_TYPE_SCAN_HULL_SHADER_TESSELLATION_INFO,
+    /**
+     * The structure is a vkd3d_shader_scan_thread_group_size_info structure.
+     * \since 1.18
+     */
+    VKD3D_SHADER_STRUCTURE_TYPE_SCAN_THREAD_GROUP_SIZE_INFO,
 
     VKD3D_FORCE_32_BIT_ENUM(VKD3D_SHADER_STRUCTURE_TYPE),
 };
@@ -417,10 +422,17 @@ struct vkd3d_shader_code
 {
     /**
      * Pointer to the code. Note that textual formats are not null-terminated.
-     * Therefore \a size should not include a null terminator, when this
-     * structure is passed as input to a vkd3d-shader function, and the
-     * allocated string will not include a null terminator when this structure
-     * is used as output.
+     * Therefore \a size should not include a null terminator when this
+     * structure is passed as input to a vkd3d-shader function, and \a size
+     * will not include a null terminator when this structure is used as
+     * output.
+     *
+     * For convenience, vkd3d_shader_preprocess() and vkd3d_shader_compile()
+     * will append a null terminator past the end of their output when
+     * outputting textual formats like VKD3D_SHADER_TARGET_D3D_ASM. This makes
+     * it safe to call functions like strlen() on \a code for such output,
+     * although doing so will obviously not account for any embedded null
+     * characters that may be present.
      */
     const void *code;
     /** Size of \a code, in bytes. */
@@ -2280,6 +2292,24 @@ struct vkd3d_shader_scan_hull_shader_tessellation_info
     enum vkd3d_shader_tessellator_output_primitive output_primitive;
     /** The tessellation partitioning mode. */
     enum vkd3d_shader_tessellator_partitioning partitioning;
+};
+
+/**
+ * A chained structure describing the thread group size in a compute shader.
+ *
+ * This structure extends vkd3d_shader_compile_info.
+ *
+ * \since 1.18
+ */
+struct vkd3d_shader_scan_thread_group_size_info
+{
+    /** Must be set to VKD3D_SHADER_STRUCTURE_TYPE_SCAN_THREAD_GROUP_SIZE_INFO. */
+    enum vkd3d_shader_structure_type type;
+    /** Optional pointer to a structure containing further parameters. */
+    const void *next;
+
+    /** The thread group size in the x/y/z direction. */
+    unsigned int x, y, z;
 };
 
 /**
