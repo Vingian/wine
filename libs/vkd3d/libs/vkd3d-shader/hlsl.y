@@ -3181,6 +3181,20 @@ static bool elementwise_intrinsic_float_convert_args(struct hlsl_ctx *ctx,
     return true;
 }
 
+static bool elementwise_intrinsic_int_convert_args(struct hlsl_ctx *ctx,
+        const struct parse_initializer *params, const struct vkd3d_shader_location *loc)
+{
+    struct hlsl_type *type;
+
+    if (!(type = elementwise_intrinsic_get_common_type(ctx, params, loc)))
+        return false;
+
+    type = hlsl_get_numeric_type(ctx, type->class, HLSL_TYPE_INT, type->e.numeric.dimx, type->e.numeric.dimy);
+
+    convert_args(ctx, params, type, loc);
+    return true;
+}
+
 static bool elementwise_intrinsic_uint_convert_args(struct hlsl_ctx *ctx,
         const struct parse_initializer *params, const struct vkd3d_shader_location *loc)
 {
@@ -3579,6 +3593,20 @@ static bool intrinsic_cosh(struct hlsl_ctx *ctx,
     return write_cosh_or_sinh(ctx, params, loc, false);
 }
 
+static bool intrinsic_countbits(struct hlsl_ctx *ctx,
+        const struct parse_initializer *params, const struct vkd3d_shader_location *loc)
+{
+    struct hlsl_ir_node *operands[HLSL_MAX_OPERANDS] = {0};
+    struct hlsl_type *type;
+
+    if (!elementwise_intrinsic_uint_convert_args(ctx, params, loc))
+        return false;
+    type = convert_numeric_type(ctx, params->args[0]->data_type, HLSL_TYPE_UINT);
+
+    operands[0] = params->args[0];
+    return add_expr(ctx, params->instrs, HLSL_OP1_COUNTBITS, operands, type, loc);
+}
+
 static bool intrinsic_cross(struct hlsl_ctx *ctx,
         const struct parse_initializer *params, const struct vkd3d_shader_location *loc)
 {
@@ -3925,6 +3953,76 @@ static bool intrinsic_f32tof16(struct hlsl_ctx *ctx,
     return add_expr(ctx, params->instrs, HLSL_OP1_F32TOF16, operands, type, loc);
 }
 
+static bool intrinsic_firstbithigh(struct hlsl_ctx *ctx,
+        const struct parse_initializer *params, const struct vkd3d_shader_location *loc)
+{
+    struct hlsl_ir_node *operands[HLSL_MAX_OPERANDS] = {0};
+    struct hlsl_type *type = params->args[0]->data_type;
+    struct hlsl_ir_node *c, *clz, *eq, *xor;
+    struct hlsl_constant_value v;
+
+    if (hlsl_version_lt(ctx, 4, 0))
+        hlsl_error(ctx, loc, VKD3D_SHADER_ERROR_HLSL_INCOMPATIBLE_PROFILE,
+                "The 'firstbithigh' intrinsic requires shader model 4.0 or higher.");
+
+    if (hlsl_type_is_unsigned_integer(type))
+    {
+        if (!elementwise_intrinsic_uint_convert_args(ctx, params, loc))
+            return false;
+    }
+    else
+    {
+        if (!elementwise_intrinsic_int_convert_args(ctx, params, loc))
+            return false;
+    }
+    type = convert_numeric_type(ctx, type, HLSL_TYPE_UINT);
+
+    operands[0] = params->args[0];
+    if (hlsl_version_lt(ctx, 5, 0))
+        return add_expr(ctx, params->instrs, HLSL_OP1_FIND_MSB, operands, type, loc);
+
+    v.u[0].u = 0x1f;
+    if (!(c = hlsl_new_constant(ctx, hlsl_get_scalar_type(ctx, HLSL_TYPE_UINT), &v, loc)))
+        return false;
+    hlsl_block_add_instr(params->instrs, c);
+
+    if (!(clz = add_expr(ctx, params->instrs, HLSL_OP1_CLZ, operands, type, loc)))
+        return false;
+    if (!(xor = add_binary_arithmetic_expr(ctx, params->instrs, HLSL_OP2_BIT_XOR, c, clz, loc)))
+        return false;
+
+    v.u[0].i = -1;
+    if (!(c = hlsl_new_constant(ctx, hlsl_get_scalar_type(ctx, HLSL_TYPE_UINT), &v, loc)))
+        return false;
+    hlsl_block_add_instr(params->instrs, c);
+
+    if (!(eq = add_binary_comparison_expr(ctx, params->instrs, HLSL_OP2_EQUAL, clz, c, loc)))
+        return false;
+
+    operands[0] = eq;
+    operands[1] = add_implicit_conversion(ctx, params->instrs, c, type, loc);
+    operands[2] = xor;
+    return add_expr(ctx, params->instrs, HLSL_OP3_TERNARY, operands, type, loc);
+}
+
+static bool intrinsic_firstbitlow(struct hlsl_ctx *ctx,
+        const struct parse_initializer *params, const struct vkd3d_shader_location *loc)
+{
+    struct hlsl_ir_node *operands[HLSL_MAX_OPERANDS] = {0};
+    struct hlsl_type *type;
+
+    if (hlsl_version_lt(ctx, 4, 0))
+        hlsl_error(ctx, loc, VKD3D_SHADER_ERROR_HLSL_INCOMPATIBLE_PROFILE,
+                "The 'firstbitlow' intrinsic requires shader model 4.0 or higher.");
+
+    if (!elementwise_intrinsic_uint_convert_args(ctx, params, loc))
+        return false;
+    type = convert_numeric_type(ctx, params->args[0]->data_type, HLSL_TYPE_UINT);
+
+    operands[0] = params->args[0];
+    return add_expr(ctx, params->instrs, HLSL_OP1_CTZ, operands, type, loc);
+}
+
 static bool intrinsic_floor(struct hlsl_ctx *ctx,
         const struct parse_initializer *params, const struct vkd3d_shader_location *loc)
 {
@@ -3981,6 +4079,53 @@ static bool intrinsic_frac(struct hlsl_ctx *ctx,
     arg = intrinsic_float_convert_arg(ctx, params, params->args[0], loc);
 
     return !!add_unary_arithmetic_expr(ctx, params->instrs, HLSL_OP1_FRACT, arg, loc);
+}
+
+static bool intrinsic_frexp(struct hlsl_ctx *ctx,
+        const struct parse_initializer *params, const struct vkd3d_shader_location *loc)
+{
+    struct hlsl_type *type, *uint_dim_type, *int_dim_type, *bool_dim_type;
+    struct hlsl_ir_function_decl *func;
+    char *body;
+
+    static const char template[] =
+            "%s frexp(%s x, out %s exp)\n"
+            "{\n"
+            /* If x is zero, always return zero for exp and mantissa. */
+            "    %s is_nonzero_mask = x != 0.0;\n"
+            "    %s bits = asuint(x);\n"
+            /* Subtract 126, not 127, to increase the exponent */
+            "    %s exp_int = asint((bits & 0x7f800000u) >> 23) - 126;\n"
+            /* Clear the given exponent and replace it with the bit pattern
+             * for 2^-1 */
+            "    %s mantissa = asfloat((bits & 0x007fffffu) | 0x3f000000);\n"
+            "    exp = is_nonzero_mask * %s(exp_int);\n"
+            "    return is_nonzero_mask * mantissa;\n"
+            "}\n";
+
+    if (!elementwise_intrinsic_float_convert_args(ctx, params, loc))
+        return false;
+    type = params->args[0]->data_type;
+
+    if (type->e.numeric.type == HLSL_TYPE_DOUBLE)
+    {
+        hlsl_fixme(ctx, loc, "frexp() on doubles.");
+        return false;
+    }
+    type = hlsl_get_numeric_type(ctx, type->class, HLSL_TYPE_FLOAT, type->e.numeric.dimx, type->e.numeric.dimy);
+    uint_dim_type = hlsl_get_numeric_type(ctx, type->class, HLSL_TYPE_UINT, type->e.numeric.dimx, type->e.numeric.dimy);
+    int_dim_type = hlsl_get_numeric_type(ctx, type->class, HLSL_TYPE_INT, type->e.numeric.dimx, type->e.numeric.dimy);
+    bool_dim_type = hlsl_get_numeric_type(ctx, type->class, HLSL_TYPE_BOOL, type->e.numeric.dimx, type->e.numeric.dimy);
+
+    if (!(body = hlsl_sprintf_alloc(ctx, template, type->name, type->name, type->name,
+            bool_dim_type->name, uint_dim_type->name, int_dim_type->name, type->name, type->name)))
+        return false;
+    func = hlsl_compile_internal_function(ctx, "frexp", body);
+    vkd3d_free(body);
+    if (!func)
+        return false;
+
+    return !!add_user_call(ctx, func, params, false, loc);
 }
 
 static bool intrinsic_fwidth(struct hlsl_ctx *ctx,
@@ -4701,7 +4846,8 @@ static bool intrinsic_tex(struct hlsl_ctx *ctx, const struct parse_initializer *
     }
 
     if (!strcmp(name, "tex2Dbias")
-            || !strcmp(name, "tex2Dlod"))
+            || !strcmp(name, "tex2Dlod")
+            || !strcmp(name, "texCUBEbias"))
     {
         struct hlsl_ir_node *lod, *c;
 
@@ -4851,6 +4997,12 @@ static bool intrinsic_texCUBE(struct hlsl_ctx *ctx,
         const struct parse_initializer *params, const struct vkd3d_shader_location *loc)
 {
     return intrinsic_tex(ctx, params, loc, "texCUBE", HLSL_SAMPLER_DIM_CUBE);
+}
+
+static bool intrinsic_texCUBEbias(struct hlsl_ctx *ctx,
+        const struct parse_initializer *params, const struct vkd3d_shader_location *loc)
+{
+    return intrinsic_tex(ctx, params, loc, "texCUBEbias", HLSL_SAMPLER_DIM_CUBE);
 }
 
 static bool intrinsic_texCUBEgrad(struct hlsl_ctx *ctx,
@@ -5263,6 +5415,7 @@ intrinsic_functions[] =
     {"clip",                                1, true,  intrinsic_clip},
     {"cos",                                 1, true,  intrinsic_cos},
     {"cosh",                                1, true,  intrinsic_cosh},
+    {"countbits",                           1, true,  intrinsic_countbits},
     {"cross",                               2, true,  intrinsic_cross},
     {"ddx",                                 1, true,  intrinsic_ddx},
     {"ddx_coarse",                          1, true,  intrinsic_ddx_coarse},
@@ -5280,9 +5433,12 @@ intrinsic_functions[] =
     {"f16tof32",                            1, true,  intrinsic_f16tof32},
     {"f32tof16",                            1, true,  intrinsic_f32tof16},
     {"faceforward",                         3, true,  intrinsic_faceforward},
+    {"firstbithigh",                        1, true,  intrinsic_firstbithigh},
+    {"firstbitlow",                         1, true,  intrinsic_firstbitlow},
     {"floor",                               1, true,  intrinsic_floor},
     {"fmod",                                2, true,  intrinsic_fmod},
     {"frac",                                1, true,  intrinsic_frac},
+    {"frexp",                               2, true,  intrinsic_frexp},
     {"fwidth",                              1, true,  intrinsic_fwidth},
     {"isinf",                               1, true,  intrinsic_isinf},
     {"ldexp",                               2, true,  intrinsic_ldexp},
@@ -5327,6 +5483,7 @@ intrinsic_functions[] =
     {"tex3Dgrad",                           4, false, intrinsic_tex3Dgrad},
     {"tex3Dproj",                           2, false, intrinsic_tex3Dproj},
     {"texCUBE",                            -1, false, intrinsic_texCUBE},
+    {"texCUBEbias",                         2, false, intrinsic_texCUBEbias},
     {"texCUBEgrad",                         4, false, intrinsic_texCUBEgrad},
     {"texCUBEproj",                         2, false, intrinsic_texCUBEproj},
     {"transpose",                           1, true,  intrinsic_transpose},
@@ -8059,7 +8216,7 @@ resource_format:
         {
             uint32_t modifiers = $1;
 
-            if (!($$ = apply_type_modifiers(ctx, $2, &modifiers, false, &@1)))
+            if (!($$ = apply_type_modifiers(ctx, $2, &modifiers, true, &@1)))
                 YYABORT;
         }
 
