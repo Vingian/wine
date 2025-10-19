@@ -29,6 +29,7 @@
 #include "windows.h"
 #include "ole2.h"
 #include "msxml2.h"
+#include "msxml6.h"
 #include "msxml2did.h"
 #include "ocidl.h"
 #include "dispex.h"
@@ -4582,6 +4583,7 @@ todo_wine {
     todo_wine
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 
+    if (!node) return;
     hr = IXMLDOMNode_get_nodeName(node, &str);
 todo_wine {
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
