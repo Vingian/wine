@@ -360,10 +360,16 @@ static WORD get_alt_machine( WORD machine )
 
 static void set_dll_path(void)
 {
-    char *p, *path = getenv( "WINEDLLPATH" );
+    char *p, *path = getenv( "WINEDLLPATH" ), *be_runtime = getenv( "PROTON_BATTLEYE_RUNTIME" ), *eac_runtime = getenv( "PROTON_EAC_RUNTIME" );
     int i, count = 0;
 
     if (path) for (p = path, count = 1; *p; p++) if (*p == ':') count++;
+
+    if (be_runtime)
+        count += 2;
+
+    if (eac_runtime)
+        count += 2;
 
     dll_paths = malloc( (count + 2) * sizeof(*dll_paths) );
     count = 0;
@@ -375,6 +381,42 @@ static void set_dll_path(void)
         path = strdup(path);
         for (p = strtok( path, ":" ); p; p = strtok( NULL, ":" )) dll_paths[count++] = strdup( p );
         free( path );
+    }
+
+    if (be_runtime)
+    {
+        const char lib32[] = "/v1/lib/wine/";
+        const char lib64[] = "/v1/lib64/wine/";
+
+        p = malloc( strlen(be_runtime) + strlen(lib32) + 1 );
+        strcpy(p, be_runtime);
+        strcat(p, lib32);
+
+        dll_paths[count++] = p;
+
+        p = malloc( strlen(be_runtime) + strlen(lib64) + 1 );
+        strcpy(p, be_runtime);
+        strcat(p, lib64);
+
+        dll_paths[count++] = p;
+    }
+
+    if (eac_runtime)
+    {
+        const char lib32[] = "/v2/lib32/";
+        const char lib64[] = "/v2/lib64/";
+
+        p = malloc( strlen(eac_runtime) + strlen(lib32) + 1 );
+        strcpy(p, eac_runtime);
+        strcat(p, lib32);
+
+        dll_paths[count++] = p;
+
+        p = malloc( strlen(eac_runtime) + strlen(lib64) + 1 );
+        strcpy(p, eac_runtime);
+        strcat(p, lib64);
+
+        dll_paths[count++] = p;
     }
 
     for (i = 0; i < count; i++) dll_path_maxlen = max( dll_path_maxlen, strlen(dll_paths[i]) );
@@ -455,7 +497,11 @@ static void init_paths(void)
 
     if ((build_dir = remove_tail( ntdll_dir, "/dlls/ntdll" )))
     {
+#ifdef _WIN64
+        wineloader = build_path( build_dir, "loader/wine64" );
+#else
         wineloader = build_path( build_dir, "loader/wine" );
+#endif
         alt_build_dir = realpath_dirname( build_path( build_dir, "loader-wow64" ));
     }
     else
@@ -463,7 +509,11 @@ static void init_paths(void)
         if (!(dll_dir = remove_tail( ntdll_dir, get_so_dir(current_machine) ))) dll_dir = ntdll_dir;
         bin_dir = build_relative_path( dll_dir, LIBDIR "/wine", BINDIR );
         data_dir = build_relative_path( dll_dir, LIBDIR "/wine", DATADIR "/wine" );
+#ifdef _WIN64
+        wineloader = build_path( ntdll_dir, "wine64" );
+#else
         wineloader = build_path( ntdll_dir, "wine" );
+#endif
     }
 
     set_dll_path();
@@ -493,10 +543,17 @@ char *get_alternate_wineloader( WORD machine )
         machine = get_alt_machine( current_machine );
     }
 
+#ifdef _WIN64
     if (!build_dir)
         asprintf( &ret, "%s%s/wine", dll_dir, get_so_dir( machine ));
     else if (alt_build_dir)
         asprintf( &ret, "%s/loader/wine", alt_build_dir );
+#else
+    if (!build_dir)
+        asprintf( &ret, "%s%s/wine64", dll_dir, get_so_dir( machine ));
+    else if (alt_build_dir)
+        asprintf( &ret, "%s/loader/wine64", alt_build_dir );
+#endif
 
     return ret;
 }
