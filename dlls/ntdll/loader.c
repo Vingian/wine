@@ -43,6 +43,7 @@ WINE_DECLARE_DEBUG_CHANNEL(relay);
 WINE_DECLARE_DEBUG_CHANNEL(snoop);
 WINE_DECLARE_DEBUG_CHANNEL(loaddll);
 WINE_DECLARE_DEBUG_CHANNEL(imports);
+WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 #ifdef _WIN64
 #define DEFAULT_SECURITY_COOKIE_64  (((ULONGLONG)0x00002b99 << 32) | 0x2ddfa232)
@@ -3453,6 +3454,7 @@ NTSTATUS WINAPI DECLSPEC_HOTPATCH LdrLoadDll(LPCWSTR path_name, DWORD flags,
     return nts;
 }
 
+extern const char * CDECL wine_get_version(void);
 
 /******************************************************************
  *		LdrGetDllFullName (NTDLL.@)
@@ -4394,10 +4396,23 @@ static void release_address_space(void)
  */
 void loader_init( CONTEXT *context, void **entry )
 {
+    OBJECT_ATTRIBUTES staging_event_attr;
+    UNICODE_STRING staging_event_string;
+    HANDLE staging_event;
     static int attach_done;
     NTSTATUS status;
     ULONG_PTR cookie, port = 0;
     WINE_MODREF *wm;
+
+    RtlInitUnicodeString( &staging_event_string, L"\\__wine_staging_warn_event" );
+    InitializeObjectAttributes( &staging_event_attr, &staging_event_string, OBJ_OPENIF, NULL, NULL );
+    if (NtCreateEvent( &staging_event, EVENT_ALL_ACCESS, &staging_event_attr, NotificationEvent, FALSE ) == STATUS_SUCCESS)
+    {
+        FIXME_(winediag)("Wine TkG %s is a testing version containing experimental patches.\n", wine_get_version());
+        FIXME_(winediag)("Please don't report bugs about it on winehq.org and use https://github.com/Frogging-Family/wine-tkg-git/issues instead.\n");
+    }
+    else
+        WARN_(winediag)("Wine TkG %s is a testing version containing experimental patches.\n", wine_get_version());
 
     if (process_detaching) NtTerminateThread( GetCurrentThread(), 0 );
 

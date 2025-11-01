@@ -315,7 +315,7 @@
 /* Define to 1 if you have the <net/route.h> header file. */
 #undef HAVE_NET_ROUTE_H
 
-/* Define to 1 if you have the <OpenCL/opencl.h> header file. */
+/* Define to 1 if you have the <CL/opencl.h> header file. */
 #undef HAVE_OPENCL_OPENCL_H
 
 /* Define to 1 if 'numaudioengines' is a member of 'oss_sysinfo'. */
