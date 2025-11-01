@@ -2046,8 +2046,8 @@ START_TEST(msado15)
     setup_database();
 
     test_Connection();
-    test_Connection_Open();
     test_ConnectionPoint();
+    test_Connection_Open();
     test_ADORecordsetConstruction(FALSE);
     test_ADORecordsetConstruction(TRUE);
     test_Fields();
