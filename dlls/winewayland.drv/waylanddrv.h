@@ -38,6 +38,7 @@
 #include "xdg-shell-client-protocol.h"
 #include "wlr-data-control-unstable-v1-client-protocol.h"
 #include "xdg-toplevel-icon-v1-client-protocol.h"
+#include "fractional-scale-v1-client-protocol.h"
 
 #include "windef.h"
 #include "winbase.h"
@@ -116,6 +117,9 @@ struct wayland_pointer
     struct wayland_cursor cursor;
     double accum_x;
     double accum_y;
+    double accum_wheel;
+    double accum_wheelH;
+    LONG discrete_event_handled;
     pthread_mutex_t mutex;
 };
 
@@ -171,6 +175,7 @@ struct wayland
     struct wl_shm *wl_shm;
     struct wp_viewporter *wp_viewporter;
     struct wl_subcompositor *wl_subcompositor;
+    struct wp_fractional_scale_manager_v1 *wp_fractional_scale_manager_v1;
     struct zwp_pointer_constraints_v1 *zwp_pointer_constraints_v1;
     struct zwp_relative_pointer_manager_v1 *zwp_relative_pointer_manager_v1;
     struct zwp_text_input_manager_v3 *zwp_text_input_manager_v3;
@@ -205,6 +210,7 @@ struct wayland_output_state
     char *name;
     int logical_x, logical_y;
     int logical_w, logical_h;
+    int transform;
 };
 
 struct wayland_output
@@ -231,6 +237,8 @@ struct wayland_window_config
     RECT rect;
     RECT client_rect;
     enum wayland_surface_config_state state;
+    /* The scaling reported by the compositor */
+    double fractional_scale;
     /* The scale (i.e., normalized dpi) the window is rendering at. */
     double scale;
     BOOL visible;
@@ -265,6 +273,7 @@ struct wayland_surface
 
     struct wl_surface *wl_surface;
     struct wp_viewport *wp_viewport;
+    struct wp_fractional_scale_v1 *wp_fractional_scale_v1;
 
     enum wayland_surface_role role;
     union

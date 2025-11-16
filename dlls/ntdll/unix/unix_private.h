@@ -146,6 +146,7 @@ struct async_fileio
 {
     async_callback_t    *callback;
     struct async_fileio *next;
+    DWORD                size;
     HANDLE               handle;
 };
 
@@ -689,5 +690,7 @@ static inline int is_gdt_sel( WORD sel )
 }
 
 #endif  /* defined(__i386__) || defined(__x86_64__) */
+
+BOOL WINAPI __wine_needs_override_large_address_aware(void);
 
 #endif /* __NTDLL_UNIX_PRIVATE_H */

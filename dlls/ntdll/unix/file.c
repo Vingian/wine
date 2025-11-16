@@ -3753,7 +3753,7 @@ static NTSTATUS nt_to_unix_file_name_no_root( OBJECT_ATTRIBUTES *attr, UNICODE_S
 
 
 /******************************************************************************
- *           nt_to_unix_file_name
+ *           nt_to_unix_file_name_internal
  *
  * Convert a file name from NT namespace to Unix namespace.
  *
@@ -3761,8 +3761,8 @@ static NTSTATUS nt_to_unix_file_name_no_root( OBJECT_ATTRIBUTES *attr, UNICODE_S
  * element doesn't have to exist; in that case STATUS_NO_SUCH_FILE is
  * returned, but the unix name is still filled in properly.
  */
-static NTSTATUS nt_to_unix_file_name( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nt_name,
-                                      char **name_ret, UINT disposition, BOOL open_reparse )
+static NTSTATUS nt_to_unix_file_name_internal( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nt_name,
+                                               char **name_ret, UINT disposition, BOOL open_reparse )
 {
     enum server_fd_type type;
     int root_fd, needs_close;
@@ -3809,6 +3809,178 @@ static NTSTATUS nt_to_unix_file_name( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *n
         TRACE( "%s not found in %s\n", debugstr_w(name), unix_name );
         free( unix_name );
     }
+    return status;
+}
+
+
+/* read the contents of an NT symlink object */
+static NTSTATUS read_nt_symlink( HANDLE root, UNICODE_STRING *name, WCHAR *target, size_t length )
+{
+    OBJECT_ATTRIBUTES attr;
+    UNICODE_STRING targetW;
+    NTSTATUS status;
+    HANDLE handle;
+
+    attr.Length = sizeof(attr);
+    attr.RootDirectory = root;
+    attr.Attributes = OBJ_CASE_INSENSITIVE;
+    attr.ObjectName = name;
+    attr.SecurityDescriptor = NULL;
+    attr.SecurityQualityOfService = NULL;
+
+    if (!(status = NtOpenSymbolicLinkObject( &handle, SYMBOLIC_LINK_QUERY, &attr )))
+    {
+        targetW.Buffer = target;
+        targetW.MaximumLength = (length - 1) * sizeof(WCHAR);
+        status = NtQuerySymbolicLinkObject( handle, &targetW, NULL );
+        NtClose( handle );
+    }
+
+    return status;
+}
+
+/* try to find dos device based on nt device name */
+static NTSTATUS nt_to_dos_device( WCHAR *name, size_t length, WCHAR *device_ret )
+{
+    static const WCHAR dosdevicesW[] = {'\\','D','o','s','D','e','v','i','c','e','s',0};
+    UNICODE_STRING dosdevW = { sizeof(dosdevicesW) - sizeof(WCHAR), sizeof(dosdevicesW), (WCHAR *)dosdevicesW };
+    WCHAR symlinkW[MAX_DIR_ENTRY_LEN];
+    OBJECT_ATTRIBUTES attr;
+    NTSTATUS status;
+    char data[1024];
+    HANDLE handle;
+    ULONG ctx = 0;
+
+    DIRECTORY_BASIC_INFORMATION *info = (DIRECTORY_BASIC_INFORMATION *)data;
+
+    attr.Length = sizeof(attr);
+    attr.RootDirectory = 0;
+    attr.ObjectName = &dosdevW;
+    attr.Attributes = OBJ_CASE_INSENSITIVE;
+    attr.SecurityDescriptor = NULL;
+    attr.SecurityQualityOfService = NULL;
+
+    status = NtOpenDirectoryObject( &handle, FILE_LIST_DIRECTORY, &attr );
+    if (status) return STATUS_BAD_DEVICE_TYPE;
+
+    while (!NtQueryDirectoryObject( handle, info, sizeof(data), TRUE, FALSE, &ctx, NULL ))
+    {
+        if (read_nt_symlink( handle, &info->ObjectName, symlinkW, MAX_DIR_ENTRY_LEN )) continue;
+        if (wcsnicmp( symlinkW, name, length )) continue;
+        if (info->ObjectName.Length != 2 * sizeof(WCHAR) || info->ObjectName.Buffer[1] != ':') continue;
+
+        *device_ret = info->ObjectName.Buffer[0];
+        NtClose( handle );
+        return STATUS_SUCCESS;
+    }
+
+    NtClose( handle );
+    return STATUS_BAD_DEVICE_TYPE;
+}
+
+/******************************************************************************
+ *           nt_to_unix_file_name
+ *
+ * Convert a file name from NT namespace to Unix namespace.
+ *
+ * If disposition is not FILE_OPEN or FILE_OVERWRITE, the last path
+ * element doesn't have to exist; in that case STATUS_NO_SUCH_FILE is
+ * returned, but the unix name is still filled in properly.
+ */
+NTSTATUS nt_to_unix_file_name( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nt_name,
+                               char **name_ret, UINT disposition, BOOL open_reparse )
+{
+    static const WCHAR systemrootW[] = {'\\','S','y','s','t','e','m','R','o','o','t','\\',0};
+    static const WCHAR dosprefixW[] = {'\\','?','?','\\'};
+    static const WCHAR deviceW[] = {'\\','D','e','v','i','c','e','\\',0};
+    WCHAR *name, *ptr, *prefix, buffer[3] = {'c',':',0};
+    UNICODE_STRING *nameW;
+    size_t offset, name_len;
+    NTSTATUS status;
+
+    if (attr->RootDirectory) return nt_to_unix_file_name_internal( attr, nt_name, name_ret, disposition, open_reparse );
+
+    nameW = attr->ObjectName;
+
+    if (nameW->Length >= sizeof(deviceW) - sizeof(WCHAR)
+        && !wcsnicmp( nameW->Buffer, deviceW, ARRAY_SIZE(deviceW) - 1 ))
+    {
+        offset = sizeof(deviceW) / sizeof(WCHAR);
+        while (offset * sizeof(WCHAR) < nameW->Length && nameW->Buffer[ offset ] != '\\') offset++;
+        if ((status = nt_to_dos_device( nameW->Buffer, offset, buffer ))) return status;
+        prefix = buffer;
+    }
+    else if (nameW->Length >= sizeof(systemrootW) - sizeof(WCHAR) &&
+             !wcsnicmp( nameW->Buffer, systemrootW, ARRAY_SIZE(systemrootW) - 1 ))
+    {
+        offset = (sizeof(systemrootW) - 1) / sizeof(WCHAR);
+        prefix = user_shared_data->NtSystemRoot;
+    }
+    else
+        return nt_to_unix_file_name_internal( attr, nt_name, name_ret, disposition, open_reparse );
+
+    name_len = sizeof(dosprefixW) + wcslen(prefix) * sizeof(WCHAR)
+               + sizeof(WCHAR) /* '\\' */ + nameW->Length - offset * sizeof(WCHAR) + sizeof(WCHAR);
+    if (!(name = malloc( name_len )))
+        return STATUS_NO_MEMORY;
+
+    ptr = name;
+    memcpy( ptr, dosprefixW, sizeof(dosprefixW) );
+    ptr += sizeof(dosprefixW) / sizeof(WCHAR);
+    wcscpy( ptr, prefix );
+    ptr += wcslen(ptr);
+    *ptr++ = '\\';
+    memcpy( ptr, nameW->Buffer + offset, nameW->Length - offset * sizeof(WCHAR) );
+    ptr[ nameW->Length / sizeof(WCHAR) - offset ] = 0;
+
+    nt_name->Buffer = name;
+    nt_name->Length = wcslen( name ) * sizeof(WCHAR);
+    attr->ObjectName = nt_name;
+    return nt_to_unix_file_name_internal( attr, nt_name, name_ret, disposition, open_reparse );
+}
+
+
+/******************************************************************************
+ *           wine_nt_to_unix_file_name
+ *
+ * Convert a file name from NT namespace to Unix namespace.
+ *
+ * If disposition is not FILE_OPEN or FILE_OVERWRITE, the last path
+ * element doesn't have to exist; in that case STATUS_NO_SUCH_FILE is
+ * returned, but the unix name is still filled in properly.
+ */
+NTSTATUS WINAPI wine_nt_to_unix_file_name( const OBJECT_ATTRIBUTES *attr, char *nameA, ULONG *size,
+                                          UINT disposition )
+{
+    char *buffer = NULL;
+    NTSTATUS status;
+    UNICODE_STRING nt_name;
+    OBJECT_ATTRIBUTES new_attr = *attr;
+
+    status = get_nt_and_unix_names( &new_attr, &nt_name, &buffer, disposition, FALSE );
+    if (!status || status == STATUS_NO_SUCH_FILE)
+    {
+        struct stat st1, st2;
+        char *name = buffer;
+
+        /* remove dosdevices prefix for z: drive if it points to the Unix root */
+        if (!strncmp( buffer, config_dir, strlen(config_dir) ) &&
+            !strncmp( buffer + strlen(config_dir), "/dosdevices/z:/", 15 ))
+        {
+            char *p = buffer + strlen(config_dir) + 14;
+            *p = 0;
+            if (!stat( buffer, &st1 ) && !stat( "/", &st2 ) &&
+                st1.st_dev == st2.st_dev && st1.st_ino == st2.st_ino)
+                name = p;
+            *p = '/';
+        }
+
+        if (*size > strlen(name)) strcpy( nameA, name );
+        else status = STATUS_BUFFER_TOO_SMALL;
+        *size = strlen(name) + 1;
+    }
+    free( buffer );
+    free( nt_name.Buffer );
     return status;
 }
 
@@ -5390,18 +5562,29 @@ void release_fileio( struct async_fileio *io )
 struct async_fileio *alloc_fileio( DWORD size, async_callback_t callback, HANDLE handle )
 {
     /* first free remaining previous fileinfos */
-    struct async_fileio *io = InterlockedExchangePointer( (void **)&fileio_freelist, NULL );
+    struct async_fileio *old_io = InterlockedExchangePointer( (void **)&fileio_freelist, NULL );
+    struct async_fileio *io = NULL;
 
-    while (io)
+    while (old_io)
     {
-        struct async_fileio *next = io->next;
-        free( io );
-        io = next;
+        if (!io && old_io->size >= size && old_io->size <= max(4096, 4 * size))
+        {
+            io     = old_io;
+            size   = old_io->size;
+            old_io = old_io->next;
+        }
+        else
+        {
+            struct async_fileio *next = old_io->next;
+            free( old_io );
+            old_io = next;
+        }
     }
 
-    if ((io = malloc( size )))
+    if (io || (io = malloc( size )))
     {
         io->callback = callback;
+        io->size     = size;
         io->handle   = handle;
     }
     return io;

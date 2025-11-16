@@ -1117,6 +1117,20 @@ static void dump_flush_key_request( const struct flush_key_request *req )
     fprintf( stderr, " hkey=%04x", req->hkey );
 }
 
+static void dump_flush_key_reply( const struct flush_key_reply *req )
+{
+    dump_abstime( " timestamp_counter=", &req->timestamp_counter );
+    fprintf( stderr, ", total=%u", req->total );
+    fprintf( stderr, ", branch_count=%d", req->branch_count );
+    dump_varargs_bytes( ", data=", cur_size );
+}
+
+static void dump_flush_key_done_request( const struct flush_key_done_request *req )
+{
+    dump_abstime( " timestamp_counter=", &req->timestamp_counter );
+    fprintf( stderr, ", branch=%d", req->branch );
+}
+
 static void dump_enum_key_request( const struct enum_key_request *req )
 {
     fprintf( stderr, " hkey=%04x", req->hkey );
@@ -1199,7 +1213,12 @@ static void dump_unload_registry_request( const struct unload_registry_request *
 static void dump_save_registry_request( const struct save_registry_request *req )
 {
     fprintf( stderr, " hkey=%04x", req->hkey );
-    fprintf( stderr, ", file=%04x", req->file );
+}
+
+static void dump_save_registry_reply( const struct save_registry_reply *req )
+{
+    fprintf( stderr, " total=%u", req->total );
+    dump_varargs_bytes( ", data=", cur_size );
 }
 
 static void dump_set_registry_notification_request( const struct set_registry_notification_request *req )
@@ -3596,6 +3615,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] =
     (dump_func)dump_open_key_request,
     (dump_func)dump_delete_key_request,
     (dump_func)dump_flush_key_request,
+    (dump_func)dump_flush_key_done_request,
     (dump_func)dump_enum_key_request,
     (dump_func)dump_set_key_value_request,
     (dump_func)dump_get_key_value_request,
@@ -3905,6 +3925,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] =
     (dump_func)dump_create_key_reply,
     (dump_func)dump_open_key_reply,
     NULL,
+    (dump_func)dump_flush_key_reply,
     NULL,
     (dump_func)dump_enum_key_reply,
     NULL,
@@ -3913,7 +3934,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] =
     NULL,
     NULL,
     NULL,
-    NULL,
+    (dump_func)dump_save_registry_reply,
     NULL,
     NULL,
     (dump_func)dump_create_timer_reply,
@@ -4216,6 +4237,7 @@ static const char * const req_names[REQ_NB_REQUESTS] =
     "open_key",
     "delete_key",
     "flush_key",
+    "flush_key_done",
     "enum_key",
     "set_key_value",
     "get_key_value",
@@ -4492,6 +4514,7 @@ static const struct
     { "INVALID_ACL",                 STATUS_INVALID_ACL },
     { "INVALID_ADDRESS",             STATUS_INVALID_ADDRESS },
     { "INVALID_ADDRESS_COMPONENT",   STATUS_INVALID_ADDRESS_COMPONENT },
+    { "INVALID_BUFFER_SIZE",         STATUS_INVALID_BUFFER_SIZE },
     { "INVALID_CID",                 STATUS_INVALID_CID },
     { "INVALID_CONNECTION",          STATUS_INVALID_CONNECTION },
     { "INVALID_DEVICE_REQUEST",      STATUS_INVALID_DEVICE_REQUEST },
@@ -4510,6 +4533,9 @@ static const struct
     { "INVALID_PIPE_STATE",          STATUS_INVALID_PIPE_STATE },
     { "INVALID_READ_MODE",           STATUS_INVALID_READ_MODE },
     { "INVALID_SECURITY_DESCR",      STATUS_INVALID_SECURITY_DESCR },
+    { "INVALID_USER_BUFFER",         STATUS_INVALID_USER_BUFFER },
+    { "IO_REPARSE_DATA_INVALID",     STATUS_IO_REPARSE_DATA_INVALID },
+    { "IO_REPARSE_TAG_INVALID",      STATUS_IO_REPARSE_TAG_INVALID },
     { "IO_TIMEOUT",                  STATUS_IO_TIMEOUT },
     { "KERNEL_APC",                  STATUS_KERNEL_APC },
     { "KEY_DELETED",                 STATUS_KEY_DELETED },
@@ -4521,6 +4547,7 @@ static const struct
     { "NETWORK_UNREACHABLE",         STATUS_NETWORK_UNREACHABLE },
     { "NOT_ALL_ASSIGNED",            STATUS_NOT_ALL_ASSIGNED },
     { "NOT_A_DIRECTORY",             STATUS_NOT_A_DIRECTORY },
+    { "NOT_A_REPARSE_POINT",         STATUS_NOT_A_REPARSE_POINT },
     { "NOT_FOUND",                   STATUS_NOT_FOUND },
     { "NOT_IMPLEMENTED",             STATUS_NOT_IMPLEMENTED },
     { "NOT_MAPPED_VIEW",             STATUS_NOT_MAPPED_VIEW },
