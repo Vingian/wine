@@ -275,6 +275,61 @@ static void pointer_handle_button(void *data, struct wl_pointer *wl_pointer,
 static void pointer_handle_axis(void *data, struct wl_pointer *wl_pointer,
                                 uint32_t time, uint32_t axis, wl_fixed_t value)
 {
+    HWND hwnd;
+    INPUT input = {0};
+    /*
+        We are given a distance in the surface local coordinate system.
+        However, we need to convert that into a WHEEL_DELTA which represents
+        physical mouse wheel motion. Using default settings on KDE Plasma,
+        I obtained a value of 15 for one mouse wheel click. So that is the
+        value I have chosen for now. However, what do other compositors default to?
+        Additionally, the system's scroll sensitivity now affects winewayland,
+        is that going to cause issues?
+
+        We can alleviate these issues for physical scroll wheels using the discrete
+        event at least.
+
+        So many unknowns for such a seemingly trivial task :(
+        just because we are trying to support touchpads...
+    */
+    double scroll_value = (wl_fixed_to_double(value) / 15.0) * WHEEL_DELTA;
+    struct wayland_pointer *pointer = &process_wayland.pointer;
+
+    if (!(hwnd = wayland_pointer_get_focused_hwnd())) return;
+    if (InterlockedCompareExchange(&pointer->discrete_event_handled, FALSE, TRUE)) return;
+
+    input.type = INPUT_MOUSE;
+
+    /*
+        Truncation makes the most sense:
+        Imagine a infinite resolution scroll wheel
+        Assume that input axis value is some fraction of a tick
+        Accumulate input axis value * WHEEL_DELTA
+        Truncate to WHEEL_DELTA precision
+        Do subtraction on original value
+        Leftover accumulation is just leftover rotation on the wheel
+    */
+    switch (axis)
+    {
+        case WL_POINTER_AXIS_VERTICAL_SCROLL:
+            input.mi.dwFlags = MOUSEEVENTF_WHEEL;
+            pointer->accum_wheel += -scroll_value;
+            input.mi.mouseData = trunc(pointer->accum_wheel / WHEEL_DELTA) * WHEEL_DELTA;
+            pointer->accum_wheel -= (int)input.mi.mouseData;
+            break;
+        case WL_POINTER_AXIS_HORIZONTAL_SCROLL:
+            input.mi.dwFlags = MOUSEEVENTF_HWHEEL;
+            pointer->accum_wheelH += scroll_value;
+            input.mi.mouseData = trunc(pointer->accum_wheelH / WHEEL_DELTA) * WHEEL_DELTA;
+            pointer->accum_wheelH -= (int)input.mi.mouseData;
+            break;
+        default: break;
+    }
+
+    TRACE("hwnd=%p axis=%u value=%lf out=%d\n", hwnd, axis, scroll_value, (int)input.mi.mouseData);
+
+    if (input.mi.mouseData)
+        NtUserSendHardwareInput(hwnd, 0, &input, 0);
 }
 
 static void pointer_handle_frame(void *data, struct wl_pointer *wl_pointer)
@@ -296,22 +351,25 @@ static void pointer_handle_axis_discrete(void *data, struct wl_pointer *wl_point
 {
     INPUT input = {0};
     HWND hwnd;
+    struct wayland_pointer *pointer = &process_wayland.pointer;
 
     if (!(hwnd = wayland_pointer_get_focused_hwnd())) return;
+
+    InterlockedExchange(&pointer->discrete_event_handled, TRUE);
 
     input.type = INPUT_MOUSE;
 
     switch (axis)
     {
-    case WL_POINTER_AXIS_VERTICAL_SCROLL:
-        input.mi.dwFlags = MOUSEEVENTF_WHEEL;
-        input.mi.mouseData = -WHEEL_DELTA * discrete;
-        break;
-    case WL_POINTER_AXIS_HORIZONTAL_SCROLL:
-        input.mi.dwFlags = MOUSEEVENTF_HWHEEL;
-        input.mi.mouseData = WHEEL_DELTA * discrete;
-        break;
-    default: break;
+        case WL_POINTER_AXIS_VERTICAL_SCROLL:
+            input.mi.dwFlags = MOUSEEVENTF_WHEEL;
+            input.mi.mouseData = -WHEEL_DELTA * discrete;
+            break;
+        case WL_POINTER_AXIS_HORIZONTAL_SCROLL:
+            input.mi.dwFlags = MOUSEEVENTF_HWHEEL;
+            input.mi.mouseData = WHEEL_DELTA * discrete;
+            break;
+        default: break;
     }
 
     TRACE("hwnd=%p axis=%u discrete=%d\n", hwnd, axis, discrete);
@@ -360,9 +418,10 @@ static void relative_pointer_v1_relative_motion(void *private,
     if (!(hwnd = wayland_pointer_get_focused_hwnd())) return;
     if (!(data = wayland_win_data_get(hwnd))) return;
 
+    /* Use "raw" input by default. However, it's not nessessarily raw */
     wayland_motion_delta_to_window(data->wayland_surface,
-                                   wl_fixed_to_double(dx),
-                                   wl_fixed_to_double(dy),
+                                   wl_fixed_to_double(dx_unaccel),
+                                   wl_fixed_to_double(dy_unaccel),
                                    &screen_x, &screen_y);
     wayland_win_data_release(data);
 
@@ -382,7 +441,7 @@ static void relative_pointer_v1_relative_motion(void *private,
     pthread_mutex_unlock(&pointer->mutex);
 
     TRACE("hwnd=%p wayland_dxdy=%.2f,%.2f accum_dxdy=%d,%d\n",
-          hwnd, wl_fixed_to_double(dx), wl_fixed_to_double(dy),
+          hwnd, wl_fixed_to_double(dx_unaccel), wl_fixed_to_double(dy_unaccel),
           input.mi.dx, input.mi.dy);
 
     NtUserSendHardwareInput(hwnd, 0, &input, 0);
