@@ -3,8 +3,6 @@
 #GH_REPO=''
 #GH_TOKEN=''
 
-FASTSYNC_PROTOCOL_VERSION_FIX='true'
-
 STAGING_EXCLUDE='-W ntdll-ForceBottomUpAlloc -W ntdll-Hide_Wine_Exports'
 
 WINE_VERSION=($(curl -s 'https://gitlab.winehq.org/api/v4/projects/5/releases' | jq -r '.[0].tag_name' 2>/dev/null | grep -o '[0-9.]*'))
@@ -40,11 +38,6 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	cp -r wine staging-wine
 	./wine-staging/staging/patchinstall.py DESTDIR=staging-wine -a $STAGING_EXCLUDE
 
-	if [ "$FASTSYNC_PROTOCOL_VERSION_FIX" == 'true' ]; then
-		SERVER_PROTOCOL_VERSION=$(find 'wine/include' -type f \( -exec sed -n '/#define[[:space:]]\+SERVER_PROTOCOL_VERSION/{s/#define[[:space:]]\+SERVER_PROTOCOL_VERSION[[:space:]]\+\([0-9]\+\)/\1/p;q1}' '{}' \; -o -quit \))
-		SERVER_PROTOCOL_VERSION_STAGING=$(find 'staging-wine/include' -type f \( -exec sed -n '/#define[[:space:]]\+SERVER_PROTOCOL_VERSION/{s/#define[[:space:]]\+SERVER_PROTOCOL_VERSION[[:space:]]\+\([0-9]\+\)/\1/p;q1}' '{}' \; -o -quit \))
-	fi
-
 	git clone 'https://github.com/Frogging-Family/wine-tkg-git.git' || exit 0
 	pushd wine-tkg-git/wine-tkg-git || exit 0
 	sed -i '/_build_in_tmpfs=/s/true/false/' non-makepkg-build.sh
@@ -55,7 +48,7 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	sed -i 's/_plain_version=""/_plain_version="wine-'"${WINE_VERSION_TAG}"'"/' customization.cfg
 	sed -i 's/_staging_version=""/_staging_version="v'"${STAGING_VERSION_TAG}"'"/' customization.cfg
  	sed -i '/_use_fastsync=/s/true/false/' customization.cfg
- 	sed -i '/_use_ntsync=/s/false/true/' customization.cfg
+ 	sed -i '/_use_ntsync=/s/true/false/' customization.cfg
   	sed -i '/_use_esync=/s/true/false/' customization.cfg
    	sed -i '/_use_fsync=/s/true/false/' customization.cfg
 	sed -i '/_proton_fs_hack=/s/false/true/' customization.cfg
@@ -67,14 +60,17 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	mkdir src
 	popd
 
+	if grep -q '+#include "wine/heap.h"' wine-tkg-git/wine-tkg-git/wine-tkg-patches/misc/winewayland/ge-wayland.patch; then
+		sed -i 's|+#include "wine/heap.h"|+//#include "wine/heap.h"|g' wine-tkg-git/wine-tkg-git/wine-tkg-patches/misc/winewayland/ge-wayland.patch
+	fi
+	if grep -q '0x0106, NtWow64WriteVirtualMemory64' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/Revert-ntdll-Get-rid-of-the-wine_nt_to_unix_file_nam.patch; then
+		cp -f Revert-ntdll-Get-rid-of-the-wine_nt_to_unix_file_nam.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/
+	fi
+
 	if [ -z "$HAVE_WINE_VERSION" ]; then
 		cp -r wine-staging wine-tkg-git/wine-tkg-git/src/wine-staging-git
 		cp -r wine wine-tkg-git/wine-tkg-git/src/wine-git
 		pushd wine-tkg-git/wine-tkg-git
-		if [ -n "$SERVER_PROTOCOL_VERSION" ]; then
-			echo "SERVER_PROTOCOL_VERSION=$SERVER_PROTOCOL_VERSION"
-			for file in 'wine-tkg-patches/misc/fastsync'/*; do [ -f "$file" ] && awk -i inplace -v VERSION="$SERVER_PROTOCOL_VERSION" '/^[ \-\+][[:space:]]*#define[[:space:]]+SERVER_PROTOCOL_VERSION/ { if (substr($0, 1, 1) == "+") VERSION++; gsub(/[0-9]+/, VERSION) } { print }' "$file"; done
-		fi
 		sed -i '/_use_staging=/s/true/false/' customization.cfg
 		./non-makepkg-build.sh </dev/null || exit 0
   		grep -q ' FAILED ' prepare.log && exit 0
@@ -86,10 +82,6 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	cp -r wine-staging wine-tkg-git/wine-tkg-git/src/wine-staging-git
 	cp -r wine wine-tkg-git/wine-tkg-git/src/wine-git
 	pushd wine-tkg-git/wine-tkg-git
-	if [ -n "$SERVER_PROTOCOL_VERSION_STAGING" ]; then
-		echo "SERVER_PROTOCOL_VERSION=$SERVER_PROTOCOL_VERSION_STAGING"
-		for file in 'wine-tkg-patches/misc/fastsync'/*; do [ -f "$file" ] && awk -i inplace -v VERSION="$SERVER_PROTOCOL_VERSION_STAGING" '/^[ \-\+][[:space:]]*#define[[:space:]]+SERVER_PROTOCOL_VERSION/ { if (substr($0, 1, 1) == "+") VERSION++; gsub(/[0-9]+/, VERSION) } { print }' "$file"; done
-	fi
 	sed -i '/_use_staging=/s/false/true/' customization.cfg
 	./non-makepkg-build.sh </dev/null || exit 0
  	grep -q ' FAILED ' prepare.log && exit 0
