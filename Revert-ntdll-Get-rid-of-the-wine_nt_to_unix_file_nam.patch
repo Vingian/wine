@@ -86,7 +86,7 @@ index 901a4f2ff25..77c8f41b08f 100644
 +    UNICODE_STRING nt_name;
 +    OBJECT_ATTRIBUTES new_attr = *attr;
 +
-+    status = get_nt_and_unix_names( &new_attr, &nt_name, &buffer, disposition );
++    status = get_nt_and_unix_names( &new_attr, &nt_name, &buffer, disposition, FALSE );
 +    if (!status || status == STATUS_NO_SUCH_FILE)
 +    {
 +        struct stat st1, st2;
