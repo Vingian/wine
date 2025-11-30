@@ -769,6 +769,7 @@ SOURCES = \
 	srrestoreptapi.h \
 	sspi.h \
 	stamp-h.in \
+	stdole32.idl \
 	stgprop.h \
 	sti.h \
 	storage.h \
@@ -968,6 +969,7 @@ SOURCES = \
 	wine/fil_data.idl \
 	wine/gdi_driver.h \
 	wine/glu.h \
+	wine/heap.h \
 	wine/hid.h \
 	wine/http.h \
 	wine/iaccessible2.idl \
