@@ -1761,7 +1761,13 @@
 @ cdecl -norelay __wine_dbg_output(str)
 @ cdecl -norelay __wine_dbg_strdup(str)
 
+# Virtual memory
+@ stdcall -syscall __wine_needs_override_large_address_aware()
+
 # Version
 @ cdecl wine_get_version()
 @ cdecl wine_get_build_id()
 @ cdecl wine_get_host_version(ptr ptr)
+
+# Filesystem
+@ stdcall -syscall wine_nt_to_unix_file_name(ptr ptr ptr long)

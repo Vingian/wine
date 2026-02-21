@@ -68,6 +68,7 @@
 #include <winternl.h>
 #include <ddk/wdm.h>
 #include <sddl.h>
+#include <ntsecapi.h>
 #include <wine/svcctl.h>
 #include <wine/list.h>
 #include <wine/asm.h>
@@ -1634,6 +1635,43 @@ static void update_user_profile(void)
     LocalFree(sid);
 }
 
+static void update_win_version(void)
+{
+    static const WCHAR win10_buildW[] = L"18363";
+
+    HKEY cv_h;
+    DWORD type, sz;
+    WCHAR current_version[256];
+
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion",
+                0, KEY_ALL_ACCESS, &cv_h) == ERROR_SUCCESS){
+        /* get the current windows version */
+        sz = sizeof(current_version);
+        if(RegQueryValueExW(cv_h, L"CurrentVersion", NULL, &type, (BYTE *)current_version, &sz) == ERROR_SUCCESS &&
+                type == REG_SZ){
+            if(!wcscmp(current_version, L"10.0")){
+                RegSetValueExW(cv_h, L"CurrentBuild", 0, REG_SZ, (const BYTE *)win10_buildW, sizeof(win10_buildW));
+                RegSetValueExW(cv_h, L"CurrentBuildNumber", 0, REG_SZ, (const BYTE *)win10_buildW, sizeof(win10_buildW));
+            }
+        }
+        RegCloseKey(cv_h);
+    }
+
+    if(RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\Wow6432Node\\Microsoft\\Windows NT\\CurrentVersion",
+                0, KEY_ALL_ACCESS, &cv_h) == ERROR_SUCCESS){
+        /* get the current windows version */
+        sz = sizeof(current_version);
+        if(RegQueryValueExW(cv_h, L"CurrentVersion", NULL, &type, (BYTE *)current_version, &sz) == ERROR_SUCCESS &&
+                type == REG_SZ){
+            if(!wcscmp(current_version, L"10.0")){
+                RegSetValueExW(cv_h, L"CurrentBuild", 0, REG_SZ, (const BYTE *)win10_buildW, sizeof(win10_buildW));
+                RegSetValueExW(cv_h, L"CurrentBuildNumber", 0, REG_SZ, (const BYTE *)win10_buildW, sizeof(win10_buildW));
+            }
+        }
+        RegCloseKey(cv_h);
+    }
+}
+
 /* execute rundll32 on the wine.inf file if necessary */
 static void update_wineprefix( BOOL force )
 {
@@ -1688,6 +1726,7 @@ static void update_wineprefix( BOOL force )
         }
         install_root_pnp_devices();
         update_user_profile();
+        update_win_version();
 
         TRACE( "wine: configuration in %s has been updated.\n", debugstr_w(prettyprint_configdir()) );
     }
@@ -1787,6 +1826,52 @@ static void usage( int status )
     WINE_MESSAGE( "    -s,--shutdown     Shutdown only, don't reboot\n" );
     WINE_MESSAGE( "    -u,--update       Update the wineprefix directory\n" );
     exit( status );
+}
+
+static void create_digitalproductid(void)
+{
+    BYTE digital_product_id[0xa4];
+    char product_id[256];
+    LSTATUS status;
+    unsigned int i;
+    DWORD size;
+    DWORD type;
+    HKEY key;
+
+    if ((status = RegOpenKeyExW( HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion",
+                       0, KEY_ALL_ACCESS, &key )))
+        return;
+    size = sizeof(product_id);
+    status = RegQueryValueExA( key, "ProductId", NULL, &type, (BYTE *)product_id, &size );
+    if (status) goto done;
+    if (!size) goto done;
+    if (product_id[size - 1])
+    {
+        if (size == sizeof(product_id)) goto done;
+        product_id[size++] = 0;
+    }
+
+    if (!RegQueryValueExA( key, "DigitalProductId", NULL, &type, NULL, &size ) && size == sizeof(digital_product_id))
+    {
+        if (RegQueryValueExA( key, "DigitalProductId", NULL, &type, digital_product_id, &size ))
+            goto done;
+        for (i = 0; i < size; ++i)
+            if (digital_product_id[i]) break;
+        if (i < size) goto done;
+    }
+
+    memset( digital_product_id, 0, sizeof(digital_product_id) );
+    *(DWORD *)digital_product_id = sizeof(digital_product_id);
+    digital_product_id[4] = 3;
+    strcpy( (char *)digital_product_id + 8, product_id );
+    *(DWORD *)(digital_product_id + 0x20) = 0x0cec;
+    *(DWORD *)(digital_product_id + 0x34) = 0x0cec;
+    strcpy( (char *)digital_product_id + 0x24, "[TH] X19-99481" );
+    digital_product_id[0x42] = 8;
+    RtlGenRandom( digital_product_id + 0x38, 0x18 );
+    RegSetValueExA( key, "DigitalProductId", 0, REG_BINARY, digital_product_id, sizeof(digital_product_id) );
+done:
+    RegCloseKey( key );
 }
 
 int __cdecl main( int argc, char *argv[] )
@@ -1902,6 +1987,7 @@ int __cdecl main( int argc, char *argv[] )
     }
     if (init || update) update_wineprefix( update );
 
+    create_digitalproductid();
     create_volatile_environment_registry_key();
     create_known_dlls();
     initialize_internet();
