@@ -2381,4 +2381,22 @@ arr (0) = 2 xor -2
 Call ok(indexedObj(3) = 6, "indexedObj(3) = " & indexedObj(3))
 Call ok(indexedObj(0) = 0, "indexedObj(0) = " & indexedObj(0))
 
+
+function wmi_array_bstr()
+const HKEY_LOCAL_MACHINE = &H80000002
+Dim oReg
+
+Set oReg = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
+
+Dim strKeyPath, strSubkey, arrSubKeys
+strKeyPath = "Software\Microsoft\NET Framework Setup\NDP"
+oReg.EnumKey HKEY_LOCAL_MACHINE, strKeyPath, arrSubKeys
+
+Call ok(getVT(arrSubKeys) = "VT_ARRAY|VT_VARIANT*", "getVT(arrSubKeys) = " & getVT(arrSubKeys))
+For Each strSubkey In arrSubKeys
+Next
+end function
+
+Call wmi_array_bstr()
+
 reportSuccess()
