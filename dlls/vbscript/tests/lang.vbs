@@ -3035,4 +3035,21 @@ Call ok(Err.Number = 13, "bool var as statement: err = " & Err.Number)
 
 On Error GoTo 0
 
+function wmi_array_bstr()
+const HKEY_LOCAL_MACHINE = &H80000002
+Dim oReg
+
+Set oReg = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv")
+
+Dim strKeyPath, strSubkey, arrSubKeys
+strKeyPath = "Software\Microsoft\NET Framework Setup\NDP"
+oReg.EnumKey HKEY_LOCAL_MACHINE, strKeyPath, arrSubKeys
+
+Call ok(getVT(arrSubKeys) = "VT_ARRAY|VT_VARIANT*", "getVT(arrSubKeys) = " & getVT(arrSubKeys))
+For Each strSubkey In arrSubKeys
+Next
+end function
+
+Call wmi_array_bstr()
+
 reportSuccess()
