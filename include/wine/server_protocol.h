@@ -3127,7 +3127,6 @@ struct send_hardware_message_reply
     int             new_y;
     char __pad_28[4];
 };
-#define SEND_HWMSG_INJECTED    0x01
 
 
 
@@ -6162,6 +6161,46 @@ struct d3dkmt_mutex_release_reply
 };
 
 
+
+struct dcomp_create_shared_visual_request
+{
+    struct request_header __header;
+    char __pad_12[4];
+};
+struct dcomp_create_shared_visual_reply
+{
+    struct reply_header __header;
+    obj_handle_t  handle;
+    char __pad_12[4];
+};
+
+
+
+struct dcomp_set_shared_visual_info_request
+{
+    struct request_header __header;
+    obj_handle_t  handle;
+    client_ptr_t  target_root;
+};
+struct dcomp_set_shared_visual_info_reply
+{
+    struct reply_header __header;
+};
+
+
+
+struct dcomp_get_shared_visual_info_request
+{
+    struct request_header __header;
+    obj_handle_t  handle;
+};
+struct dcomp_get_shared_visual_info_reply
+{
+    struct reply_header __header;
+    client_ptr_t  target_root;
+};
+
+
 enum request
 {
     REQ_new_process,
@@ -6470,6 +6509,9 @@ enum request
     REQ_d3dkmt_object_open_name,
     REQ_d3dkmt_mutex_acquire,
     REQ_d3dkmt_mutex_release,
+    REQ_dcomp_create_shared_visual,
+    REQ_dcomp_set_shared_visual_info,
+    REQ_dcomp_get_shared_visual_info,
     REQ_NB_REQUESTS
 };
 
@@ -6783,6 +6825,9 @@ union generic_request
     struct d3dkmt_object_open_name_request d3dkmt_object_open_name_request;
     struct d3dkmt_mutex_acquire_request d3dkmt_mutex_acquire_request;
     struct d3dkmt_mutex_release_request d3dkmt_mutex_release_request;
+    struct dcomp_create_shared_visual_request dcomp_create_shared_visual_request;
+    struct dcomp_set_shared_visual_info_request dcomp_set_shared_visual_info_request;
+    struct dcomp_get_shared_visual_info_request dcomp_get_shared_visual_info_request;
 };
 union generic_reply
 {
@@ -7094,8 +7139,11 @@ union generic_reply
     struct d3dkmt_object_open_name_reply d3dkmt_object_open_name_reply;
     struct d3dkmt_mutex_acquire_reply d3dkmt_mutex_acquire_reply;
     struct d3dkmt_mutex_release_reply d3dkmt_mutex_release_reply;
+    struct dcomp_create_shared_visual_reply dcomp_create_shared_visual_reply;
+    struct dcomp_set_shared_visual_info_reply dcomp_set_shared_visual_info_reply;
+    struct dcomp_get_shared_visual_info_reply dcomp_get_shared_visual_info_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 931
+#define SERVER_PROTOCOL_VERSION 932
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */
