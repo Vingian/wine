@@ -320,12 +320,13 @@ HRESULT WINAPI D3DCompile2VKD3D(const void *data, SIZE_T data_size, const char *
             option->value |= VKD3D_SHADER_COMPILE_OPTION_PACK_MATRIX_COLUMN_MAJOR;
     }
 
+    option = &options[compile_info.option_count++];
+    option->name = VKD3D_SHADER_COMPILE_OPTION_BACKWARD_COMPATIBILITY;
+    option->value = 0;
     if (flags & D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY)
-    {
-        option = &options[compile_info.option_count++];
-        option->name = VKD3D_SHADER_COMPILE_OPTION_BACKWARD_COMPATIBILITY;
         option->value = VKD3D_SHADER_COMPILE_OPTION_BACKCOMPAT_MAP_SEMANTIC_NAMES;
-    }
+    else if (compiler_version >= 37)
+        option->value = VKD3D_SHADER_COMPILE_OPTION_CONST_GLOBAL_UNIFORMS;
 
     if (effect_flags & D3DCOMPILE_EFFECT_CHILD_EFFECT)
     {

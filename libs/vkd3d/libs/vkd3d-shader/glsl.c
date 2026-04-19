@@ -187,7 +187,7 @@ static void shader_glsl_print_image_name(struct vkd3d_string_buffer *buffer,
 }
 
 static void shader_glsl_print_register_name(struct vkd3d_string_buffer *buffer,
-        struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_register *reg)
+        struct vkd3d_glsl_generator *gen, const struct vsir_operand *reg)
 {
     switch (reg->type)
     {
@@ -391,7 +391,7 @@ static void shader_glsl_print_bitcast(struct vkd3d_string_buffer *dst, struct vk
 static void shader_glsl_print_src(struct vkd3d_string_buffer *buffer, struct vkd3d_glsl_generator *gen,
         const struct vsir_src_operand *vsir_src, uint32_t mask, enum vsir_data_type data_type)
 {
-    const struct vkd3d_shader_register *reg = &vsir_src->reg;
+    const struct vsir_operand *reg = &vsir_src->reg;
     struct vkd3d_string_buffer *register_name;
     enum vsir_data_type src_data_type;
     unsigned int size;
@@ -2331,6 +2331,15 @@ static void shader_glsl_handle_global_flags(struct vkd3d_string_buffer *buffer,
     if (flags & ~VKD3DSGF_REFACTORING_ALLOWED)
         vkd3d_glsl_compiler_error(gen, VKD3D_SHADER_ERROR_GLSL_INTERNAL,
                 "Internal compiler error: Unhandled global flags %#"PRIx64".", (uint64_t)flags);
+
+    if (gen->program->f16_denormal_mode != VKD3D_SHADER_DENORMAL_MODE_ANY
+            || gen->program->f32_denormal_mode != VKD3D_SHADER_DENORMAL_MODE_ANY
+            || gen->program->f64_denormal_mode != VKD3D_SHADER_DENORMAL_MODE_ANY)
+    {
+        vkd3d_glsl_compiler_error(gen, VKD3D_SHADER_ERROR_GLSL_UNSUPPORTED,
+                "Cannot emit denormal modes. The target environment does not support float controls.");
+        return;
+    }
 }
 
 static void shader_glsl_generate_declarations(struct vkd3d_glsl_generator *gen)

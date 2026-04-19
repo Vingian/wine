@@ -2378,7 +2378,7 @@ enum message_type
 @REQ(send_hardware_message)
     user_handle_t   win;       /* window handle */
     union hw_input  input;     /* input data */
-    unsigned int    flags;     /* flags (see below) */
+    unsigned int    flags;     /* flags (see ntuser.h) */
     VARARG(report,bytes);      /* HID report data */
 @REPLY
     int             wait;      /* do we need to wait for a reply? */
@@ -2387,7 +2387,6 @@ enum message_type
     int             new_x;     /* new cursor position */
     int             new_y;
 @END
-#define SEND_HWMSG_INJECTED    0x01
 
 
 /* Get a message from the current queue */
@@ -4273,4 +4272,26 @@ enum inproc_sync_type
     unsigned __int64    fence_value;    /* semaphore fence value */
     data_size_t         runtime_size;   /* size of client runtime data */
     VARARG(runtime,bytes);              /* client runtime data */
+@END
+
+
+/* Create a DirectComposition shared visual handle */
+@REQ(dcomp_create_shared_visual)
+@REPLY
+    obj_handle_t  handle;                     /* created shared visual handle */
+@END
+
+
+/* Set info for a DirectComposition shared visual object */
+@REQ(dcomp_set_shared_visual_info)
+    obj_handle_t  handle;                    /* shared visual handle */
+    client_ptr_t  target_root;               /* root IDCompositionVisual pointer for the target created from this shared visual */
+@END
+
+
+/* Get info for a DirectComposition shared visual */
+@REQ(dcomp_get_shared_visual_info)
+    obj_handle_t  handle;                     /* shared visual handle */
+@REPLY
+    client_ptr_t  target_root;                /* root IDCompositionVisual pointer for the target created from this shared visual */
 @END

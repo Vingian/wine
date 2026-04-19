@@ -307,7 +307,7 @@ static void msl_print_uav_name(struct vkd3d_string_buffer *buffer, struct msl_ge
 }
 
 static enum msl_data_type msl_print_register_name(struct vkd3d_string_buffer *buffer,
-        struct msl_generator *gen, const struct vkd3d_shader_register *reg)
+        struct msl_generator *gen, const struct vsir_operand *reg)
 {
     const struct vkd3d_shader_descriptor_info1 *descriptor;
     unsigned int binding, cbv_id, cbv_idx;
@@ -556,7 +556,7 @@ static void msl_print_bitcast(struct vkd3d_string_buffer *dst, struct msl_genera
 static void msl_print_src_with_type(struct vkd3d_string_buffer *buffer, struct msl_generator *gen,
     const struct vsir_src_operand *vsir_src, uint32_t mask, enum vsir_data_type data_type)
 {
-    const struct vkd3d_shader_register *reg = &vsir_src->reg;
+    const struct vsir_operand *reg = &vsir_src->reg;
     struct vkd3d_string_buffer *register_name;
     enum msl_data_type src_data_type;
 
@@ -2264,6 +2264,15 @@ static int msl_generator_generate(struct msl_generator *gen, struct vkd3d_shader
     if (gen->program->global_flags & ~(VKD3DSGF_REFACTORING_ALLOWED | VKD3DSGF_FORCE_EARLY_DEPTH_STENCIL))
         msl_compiler_error(gen, VKD3D_SHADER_ERROR_MSL_INTERNAL,
                 "Internal compiler error: Unhandled global flags %#"PRIx64".", (uint64_t)gen->program->global_flags);
+
+    if (gen->program->f16_denormal_mode != VKD3D_SHADER_DENORMAL_MODE_ANY
+            || gen->program->f32_denormal_mode != VKD3D_SHADER_DENORMAL_MODE_ANY
+            || gen->program->f64_denormal_mode != VKD3D_SHADER_DENORMAL_MODE_ANY)
+    {
+        msl_compiler_error(gen, VKD3D_SHADER_ERROR_MSL_UNSUPPORTED,
+                "Cannot emit denormal modes. The target environment does not support float controls.");
+        return VKD3D_ERROR;
+    }
 
     vkd3d_string_buffer_printf(gen->buffer, "union vkd3d_scalar\n{\n");
     vkd3d_string_buffer_printf(gen->buffer, "    uint u;\n");

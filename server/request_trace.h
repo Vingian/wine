@@ -3512,6 +3512,31 @@ static void dump_d3dkmt_mutex_release_request( const struct d3dkmt_mutex_release
     dump_varargs_bytes( ", runtime=", cur_size );
 }
 
+static void dump_dcomp_create_shared_visual_request( const struct dcomp_create_shared_visual_request *req )
+{
+}
+
+static void dump_dcomp_create_shared_visual_reply( const struct dcomp_create_shared_visual_reply *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+}
+
+static void dump_dcomp_set_shared_visual_info_request( const struct dcomp_set_shared_visual_info_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+    dump_uint64( ", target_root=", &req->target_root );
+}
+
+static void dump_dcomp_get_shared_visual_info_request( const struct dcomp_get_shared_visual_info_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+}
+
+static void dump_dcomp_get_shared_visual_info_reply( const struct dcomp_get_shared_visual_info_reply *req )
+{
+    dump_uint64( " target_root=", &req->target_root );
+}
+
 typedef void (*dump_func)( const void *req );
 
 static const dump_func req_dumpers[REQ_NB_REQUESTS] =
@@ -3822,6 +3847,9 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] =
     (dump_func)dump_d3dkmt_object_open_name_request,
     (dump_func)dump_d3dkmt_mutex_acquire_request,
     (dump_func)dump_d3dkmt_mutex_release_request,
+    (dump_func)dump_dcomp_create_shared_visual_request,
+    (dump_func)dump_dcomp_set_shared_visual_info_request,
+    (dump_func)dump_dcomp_get_shared_visual_info_request,
 };
 
 static const dump_func reply_dumpers[REQ_NB_REQUESTS] =
@@ -4132,6 +4160,9 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] =
     (dump_func)dump_d3dkmt_object_open_name_reply,
     (dump_func)dump_d3dkmt_mutex_acquire_reply,
     NULL,
+    (dump_func)dump_dcomp_create_shared_visual_reply,
+    NULL,
+    (dump_func)dump_dcomp_get_shared_visual_info_reply,
 };
 
 static const char * const req_names[REQ_NB_REQUESTS] =
@@ -4442,6 +4473,9 @@ static const char * const req_names[REQ_NB_REQUESTS] =
     "d3dkmt_object_open_name",
     "d3dkmt_mutex_acquire",
     "d3dkmt_mutex_release",
+    "dcomp_create_shared_visual",
+    "dcomp_set_shared_visual_info",
+    "dcomp_get_shared_visual_info",
 };
 
 static const struct

@@ -189,6 +189,7 @@ enum vkd3d_shader_error
     VKD3D_SHADER_WARNING_HLSL_IGNORED_DEFAULT_VALUE     = 5306,
     VKD3D_SHADER_WARNING_HLSL_IGNORED_MODIFIER          = 5307,
     VKD3D_SHADER_WARNING_HLSL_OVERRIDDEN_SEMANTIC       = 5308,
+    VKD3D_SHADER_WARNING_HLSL_REDEFINED                 = 5309,
 
     VKD3D_SHADER_ERROR_GLSL_INTERNAL                    = 6000,
     VKD3D_SHADER_ERROR_GLSL_BINDING_NOT_FOUND           = 6001,
@@ -279,6 +280,7 @@ enum vkd3d_shader_error
     VKD3D_SHADER_ERROR_VSIR_INVALID_RESOURCE_TYPE       = 9025,
     VKD3D_SHADER_ERROR_VSIR_INVALID_DESCRIPTOR_COUNT    = 9026,
     VKD3D_SHADER_ERROR_VSIR_INVALID_FLAGS               = 9027,
+    VKD3D_SHADER_ERROR_VSIR_MULTIPLE_SRC_OPERAND_OWNERS = 9028,
 
     VKD3D_SHADER_WARNING_VSIR_DYNAMIC_DESCRIPTOR_ARRAY  = 9300,
 
@@ -872,7 +874,7 @@ enum vsir_global_flags
     VKD3DSGF_SKIP_OPTIMIZATION                 = 0x10,
     VKD3DSGF_ENABLE_MINIMUM_PRECISION          = 0x20,
     VKD3DSGF_ENABLE_11_1_DOUBLE_EXTENSIONS     = 0x40,
-    VKD3DSGF_ENABLE_SHADER_EXTENSIONS          = 0x80, /* never emitted? */
+    VKD3DSGF_ENABLE_11_1_SHADER_EXTENSIONS     = 0x80,
     VKD3DSGF_BIND_FOR_DURATION                 =     0x100,
     VKD3DSGF_ENABLE_VP_AND_RT_ARRAY_INDEX      =     0x200,
     VKD3DSGF_ENABLE_INNER_COVERAGE             =     0x400,
@@ -888,7 +890,7 @@ enum vsir_global_flags
     VKD3DSGF_ENABLE_INT64                      =  0x100000,
     VKD3DSGF_ENABLE_VIEWID                     =  0x200000,
     VKD3DSGF_ENABLE_BARYCENTRICS               =  0x400000,
-    VKD3DSGF_FORCE_NATIVE_LOW_PRECISION        =  0x800000,
+    VKD3DSGF_ENABLE_NATIVE_LOW_PRECISION       =  0x800000,
     VKD3DSGF_ENABLE_SHADINGRATE                = 0x1000000,
     VKD3DSGF_ENABLE_RAYTRACING_TIER_1_1        = 0x2000000,
     VKD3DSGF_ENABLE_SAMPLER_FEEDBACK           = 0x4000000,
@@ -1033,6 +1035,8 @@ struct vkd3d_shader_indexable_temp
     const struct vkd3d_shader_immediate_constant_buffer *initialiser;
 };
 
+/* This structure is used by vkd3d_shader_register_index_compare(); changes to
+ * the structure should be reflected by the comparison function as well. */
 struct vkd3d_shader_register_index
 {
     struct vsir_src_operand *rel_addr;
@@ -1041,7 +1045,9 @@ struct vkd3d_shader_register_index
     bool is_in_bounds;
 };
 
-struct vkd3d_shader_register
+/* This structure is used by vsir_operand_compare(); changes to the structure
+ * should be reflected by the comparison function as well. */
+struct vsir_operand
 {
     enum vkd3d_shader_register_type type;
     enum vkd3d_shader_register_precision precision;
@@ -1062,10 +1068,10 @@ struct vkd3d_shader_register
     } u;
 };
 
-void vsir_register_init(struct vkd3d_shader_register *reg, enum vkd3d_shader_register_type reg_type,
+void vsir_operand_init(struct vsir_operand *reg, enum vkd3d_shader_register_type reg_type,
         enum vsir_data_type data_type, unsigned int idx_count);
 
-static inline bool vsir_register_is_descriptor(const struct vkd3d_shader_register *reg)
+static inline bool vsir_operand_is_descriptor(const struct vsir_operand *reg)
 {
     switch (reg->type)
     {
@@ -1078,6 +1084,31 @@ static inline bool vsir_register_is_descriptor(const struct vkd3d_shader_registe
         default:
             return false;
     }
+}
+
+static inline bool vsir_operand_is_constant(const struct vsir_operand *reg)
+{
+    return (reg->type == VKD3DSPR_IMMCONST || reg->type == VKD3DSPR_IMMCONST64);
+}
+
+static inline bool vsir_operand_is_undef(const struct vsir_operand *reg)
+{
+    return reg->type == VKD3DSPR_UNDEF;
+}
+
+static inline bool vsir_operand_is_constant_or_undef(const struct vsir_operand *reg)
+{
+    return vsir_operand_is_constant(reg) || vsir_operand_is_undef(reg);
+}
+
+static inline bool vsir_operand_is_label(const struct vsir_operand *reg)
+{
+    return reg->type == VKD3DSPR_LABEL;
+}
+
+static inline bool vsir_operand_is_ssa(const struct vsir_operand *reg)
+{
+    return reg->type == VKD3DSPR_SSA;
 }
 
 static inline enum vkd3d_shader_register_type vsir_register_type_from_sysval_input(
@@ -1094,9 +1125,11 @@ static inline enum vkd3d_shader_register_type vsir_register_type_from_sysval_inp
     }
 }
 
+/* This structure is used by vsir_cse_expr_key_compare(); changes to the
+ * structure should be reflected by that function as well. */
 struct vsir_dst_operand
 {
-    struct vkd3d_shader_register reg;
+    struct vsir_operand reg;
     uint32_t write_mask;
     uint32_t modifiers;
     unsigned int shift;
@@ -1106,11 +1139,16 @@ void vsir_dst_operand_init(struct vsir_dst_operand *dst, enum vkd3d_shader_regis
         enum vsir_data_type data_type, unsigned int idx_count);
 void vsir_dst_operand_init_null(struct vsir_dst_operand *dst);
 
+/* This structure is used by vsir_src_operand_compare(); changes to the
+ * structure should be reflected by the comparison function as well. */
 struct vsir_src_operand
 {
-    struct vkd3d_shader_register reg;
+    struct vsir_operand reg;
     uint32_t swizzle;
     enum vkd3d_shader_src_modifier modifiers;
+
+    /* Index of the instruction that uses the src operand, only used during validation. */
+    size_t owner_index;
 };
 
 void vsir_src_operand_init(struct vsir_src_operand *src, enum vkd3d_shader_register_type reg_type,
@@ -1380,6 +1418,8 @@ struct vkd3d_shader_location
     unsigned int line, column;
 };
 
+/* This structure is used by vsir_cse_expr_key_compare(); changes to the
+ * structure should be reflected by that function as well. */
 struct vkd3d_shader_instruction
 {
     struct vkd3d_shader_location location;
@@ -1445,37 +1485,6 @@ static inline void vkd3d_shader_instruction_make_nop(struct vkd3d_shader_instruc
 static inline bool vkd3d_shader_instruction_has_texel_offset(const struct vkd3d_shader_instruction *ins)
 {
     return ins->texel_offset.u || ins->texel_offset.v || ins->texel_offset.w;
-}
-
-static inline bool register_is_constant(const struct vkd3d_shader_register *reg)
-{
-    return (reg->type == VKD3DSPR_IMMCONST || reg->type == VKD3DSPR_IMMCONST64);
-}
-
-static inline bool register_is_undef(const struct vkd3d_shader_register *reg)
-{
-    return reg->type == VKD3DSPR_UNDEF;
-}
-
-static inline bool register_is_constant_or_undef(const struct vkd3d_shader_register *reg)
-{
-    return register_is_constant(reg) || register_is_undef(reg);
-}
-
-static inline bool register_is_numeric_array(const struct vkd3d_shader_register *reg)
-{
-    return (reg->type == VKD3DSPR_IMMCONSTBUFFER || reg->type == VKD3DSPR_IDXTEMP
-            || reg->type == VKD3DSPR_GROUPSHAREDMEM);
-}
-
-static inline bool vsir_register_is_label(const struct vkd3d_shader_register *reg)
-{
-    return reg->type == VKD3DSPR_LABEL;
-}
-
-static inline bool register_is_ssa(const struct vkd3d_shader_register *reg)
-{
-    return reg->type == VKD3DSPR_SSA;
 }
 
 struct vkd3d_shader_param_node
@@ -1638,14 +1647,7 @@ enum vsir_normalisation_level
     VSIR_NORMALISED_SM6,
 };
 
-enum vsir_denorm_mode
-{
-    VSIR_DENORM_ANY = 0,
-    VSIR_DENORM_PRESERVE,
-    VSIR_DENORM_FLUSH_TO_ZERO,
-};
-
-const char *vsir_denorm_mode_get_name(enum vsir_denorm_mode m, const char *error);
+const char *vsir_denorm_mode_get_name(enum vkd3d_shader_denormal_mode m, const char *error);
 
 struct vkd3d_shader_descriptor_info1
 {
@@ -1726,9 +1728,9 @@ struct vsir_program
     struct vkd3d_shader_param_allocator src_operands;
     struct vkd3d_shader_param_allocator dst_operands;
 
-    enum vsir_denorm_mode f16_denorm_mode;
-    enum vsir_denorm_mode f32_denorm_mode;
-    enum vsir_denorm_mode f64_denorm_mode;
+    enum vkd3d_shader_denormal_mode f16_denormal_mode;
+    enum vkd3d_shader_denormal_mode f32_denormal_mode;
+    enum vkd3d_shader_denormal_mode f64_denormal_mode;
 };
 
 enum vkd3d_result vsir_allocate_temp_registers(struct vsir_program *program,
@@ -1841,6 +1843,7 @@ void vkd3d_string_buffer_cache_cleanup(struct vkd3d_string_buffer_cache *list);
 void vkd3d_string_buffer_cache_init(struct vkd3d_string_buffer_cache *list);
 void vkd3d_string_buffer_clear(struct vkd3d_string_buffer *buffer);
 void vkd3d_string_buffer_truncate(struct vkd3d_string_buffer *buffer, size_t size);
+int vkd3d_string_buffer_print_f16(struct vkd3d_string_buffer *buffer, uint16_t f);
 int vkd3d_string_buffer_print_f32(struct vkd3d_string_buffer *buffer, float f);
 int vkd3d_string_buffer_print_f64(struct vkd3d_string_buffer *buffer, double d);
 int vkd3d_string_buffer_print_string_escaped(struct vkd3d_string_buffer *buffer, const char *s, size_t len);
@@ -1918,9 +1921,6 @@ void vkd3d_shader_vwarning(struct vkd3d_shader_message_context *context, const s
 void vkd3d_shader_string_from_message_context(char **out, struct vkd3d_shader_message_context *context);
 
 uint64_t vkd3d_shader_init_config_flags(void);
-void vkd3d_shader_trace_text_(const char *text, size_t size, const char *function);
-#define vkd3d_shader_trace_text(text, size) \
-        vkd3d_shader_trace_text_(text, size, __FUNCTION__)
 
 bool sm1_register_from_semantic_name(const struct vkd3d_shader_version *version, const char *semantic_name,
         unsigned int semantic_index, bool output, enum vkd3d_shader_sysval_semantic *sysval,
@@ -1929,11 +1929,12 @@ bool sm1_usage_from_semantic_name(const char *semantic_name,
         uint32_t semantic_index, enum vkd3d_decl_usage *usage, uint32_t *usage_idx);
 bool sm4_register_from_semantic_name(const struct vkd3d_shader_version *version,
         const char *semantic_name, bool output, enum vkd3d_shader_register_type *type, bool *has_idx);
-bool shader_sm4_is_scalar_register(const struct vkd3d_shader_register *reg);
+bool shader_sm4_is_scalar_register(const struct vsir_operand *reg);
 bool sm4_sysval_semantic_from_semantic_name(enum vkd3d_shader_sysval_semantic *sysval_semantic,
-        const struct vkd3d_shader_version *version, bool semantic_compat_mapping, enum vkd3d_tessellator_domain domain,
-        const char *semantic_name, unsigned int semantic_idx, bool output,
-        bool is_patch_constant_func, bool is_primitive);
+        const struct vkd3d_shader_version *version,
+        enum vkd3d_shader_compile_option_backward_compatibility compatibility_flags,
+        enum vkd3d_tessellator_domain domain, const char *semantic_name,
+        unsigned int semantic_idx, bool output, bool is_patch_constant_func, bool is_primitive);
 
 int d3dbc_parse(const struct vkd3d_shader_compile_info *compile_info, uint64_t config_flags,
         struct vkd3d_shader_message_context *message_context, struct vsir_program *program);
