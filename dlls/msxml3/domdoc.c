@@ -1665,7 +1665,7 @@ static HRESULT WINAPI domdoc_put_preserveWhiteSpace(IXMLDOMDocument3 *iface, VAR
 
     TRACE("%p, %d.\n", iface, v);
 
-    node->properties->preserving = v;
+    node->properties->preserving = v == VARIANT_TRUE ? VARIANT_TRUE : VARIANT_FALSE;
     return S_OK;
 }
 
