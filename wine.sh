@@ -63,7 +63,7 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	if grep -q '+#include "wine/heap.h"' wine-tkg-git/wine-tkg-git/wine-tkg-patches/misc/winewayland/ge-wayland.patch; then
 		sed -i 's|+#include "wine/heap.h"|+//#include "wine/heap.h"|g' wine-tkg-git/wine-tkg-git/wine-tkg-patches/misc/winewayland/ge-wayland.patch
 	fi
-	if grep -q '0x0106, NtWow64WriteVirtualMemory64' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/Revert-ntdll-Get-rid-of-the-wine_nt_to_unix_file_nam.patch; then
+	if grep -q '0x0107, NtWow64WriteVirtualMemory64' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/Revert-ntdll-Get-rid-of-the-wine_nt_to_unix_file_nam.patch; then
 		cp -f Revert-ntdll-Get-rid-of-the-wine_nt_to_unix_file_nam.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/
 	fi
 	if grep -q 'Strip path information if the module resides in the system directory' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/proton-eac_bridge.patch; then
