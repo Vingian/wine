@@ -5586,6 +5586,11 @@ static inline PLIST_ENTRY RemoveTailList(PLIST_ENTRY le)
     return e;
 }
 
+/* Wine internal functions */
+
+NTSYSAPI NTSTATUS WINAPI wine_nt_to_unix_file_name( const OBJECT_ATTRIBUTES *attr, char *nameA, ULONG *size,
+                                                    UINT disposition );
+
 
 #ifdef __WINESRC__
 

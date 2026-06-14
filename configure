@@ -1708,6 +1708,7 @@ enable_po
 enable_arp
 enable_aspnet_regiis
 enable_attrib
+enable_belauncher
 enable_cabarc
 enable_cacls
 enable_certutil
@@ -4421,7 +4422,7 @@ fi
 # Check whether --with-opencl was given.
 if test ${with_opencl+y}
 then :
-  withval=$with_opencl; if test "x$withval" = "xno"; then ac_cv_header_CL_cl_h=no; ac_cv_header_OpenCL_opencl_h=no; fi
+  withval=$with_opencl; if test "x$withval" = "xno"; then ac_cv_header_CL_cl_h=no; ac_cv_header_CL_opencl_h=no; fi
 fi
 
 
@@ -10745,12 +10746,6 @@ then :
   printf '%s\n' "#define HAVE_CL_CL_H 1" >>confdefs.h
 
 fi
-ac_fn_c_check_header_compile "$LINENO" "OpenCL/opencl.h" "ac_cv_header_OpenCL_opencl_h" "$ac_includes_default"
-if test "x$ac_cv_header_OpenCL_opencl_h" = xyes
-then :
-  printf '%s\n' "#define HAVE_OPENCL_OPENCL_H 1" >>confdefs.h
-
-fi
 ac_fn_c_check_header_compile "$LINENO" "arpa/inet.h" "ac_cv_header_arpa_inet_h" "$ac_includes_default"
 if test "x$ac_cv_header_arpa_inet_h" = xyes
 then :
@@ -11229,6 +11224,14 @@ ac_fn_c_check_header_compile "$LINENO" "valgrind/valgrind.h" "ac_cv_header_valgr
 if test "x$ac_cv_header_valgrind_valgrind_h" = xyes
 then :
   printf '%s\n' "#define HAVE_VALGRIND_VALGRIND_H 1" >>confdefs.h
+
+fi
+
+ac_fn_c_check_header_compile "$LINENO" "CL/opencl.h" "ac_cv_header_CL_opencl_h" "$ac_includes_default"
+if test "x$ac_cv_header_CL_opencl_h" = xyes
+then :
+
+printf '%s\n' "#define HAVE_OPENCL_OPENCL_H 1" >>confdefs.h
 
 fi
 
@@ -12426,7 +12429,7 @@ fi
 
         enable_winecoreaudio_drv=${enable_winecoreaudio_drv:-yes}
     fi
-    if test "$ac_cv_header_OpenCL_opencl_h" = "yes"
+    if test "$ac_cv_header_CL_opencl_h" = "yes"
     then
         OPENCL_LIBS="-framework OpenCL"
 
@@ -21543,7 +21546,13 @@ then
 fi
 
 
-WINELOADER_PROGRAMS="wine"
+case "$HOST_ARCH,$PE_ARCHS" in
+  x86_64,i386) wine_binary="wine" ;;
+  x86_64,*) wine_binary="wine64" ;;
+  *) wine_binary="wine" ;;
+esac
+test "$wine_binary" = wine || as_fn_append CONFIGURE_TARGETS " loader/wine"
+WINELOADER_PROGRAMS="$wine_binary"
 
 
 case $host_os in
@@ -21557,7 +21566,8 @@ esac
 
 if test "$wine_use_preloader" = "yes"
 then
-  WINELOADER_PROGRAMS="$WINELOADER_PROGRAMS wine-preloader"
+  test "$wine_binary" = wine || as_fn_append CONFIGURE_TARGETS " loader/wine-preloader"
+  WINELOADER_PROGRAMS="$WINELOADER_PROGRAMS $wine_binary-preloader"
 
 printf '%s\n' "#define HAVE_WINE_PRELOADER 1" >>confdefs.h
 
@@ -23815,6 +23825,7 @@ wine_fn_config_makefile po enable_po
 wine_fn_config_makefile programs/arp enable_arp
 wine_fn_config_makefile programs/aspnet_regiis enable_aspnet_regiis
 wine_fn_config_makefile programs/attrib enable_attrib
+wine_fn_config_makefile programs/belauncher enable_belauncher
 wine_fn_config_makefile programs/cabarc enable_cabarc
 wine_fn_config_makefile programs/cacls enable_cacls
 wine_fn_config_makefile programs/certutil enable_certutil
@@ -24018,7 +24029,7 @@ fi
 
 as_fn_append wine_rules "
 dlls/ntdll/unix/version.c: dummy
-	@version=\`(GIT_DIR=${wine_srcdir}.git git describe HEAD 2>/dev/null || echo \"wine-\$(PACKAGE_VERSION)\") | sed -n -e '\$\$s/\(.*\)/const char wine_build[] = \"\\1\";/p'\` && (echo \$\$version | cmp -s - \$@) || echo \$\$version >\$@ || (rm -f \$@ && exit 1)
+	@version=\`(echo \"wine-11.11.r0.gf6c044e1890\") | sed -n -e '\$\$s/\(.*\)/const char wine_build[] = \"\\1  ( TkG Plain )\";/p'\` && (echo \$\$version | cmp -s - \$@) || echo \$\$version >\$@ || (rm -f \$@ && exit 1)
 programs/winetest/build.rc: dummy
 	@build=\"STRINGTABLE { 1 \\\"\`GIT_DIR=${wine_srcdir}.git git rev-parse HEAD 2>/dev/null\`\\\" }\" && (echo \$\$build | cmp -s - \$@) || echo \$\$build >\$@ || (rm -f \$@ && exit 1)
 dlls/wineandroid.drv/wine-debug.apk: dlls/wineandroid.drv/build.gradle ${wine_srcdir}dlls/wineandroid.drv/AndroidManifest.xml ${wine_srcdir}dlls/wineandroid.drv/WineActivity.java ${wine_srcdir}dlls/wineandroid.drv/wine.svg

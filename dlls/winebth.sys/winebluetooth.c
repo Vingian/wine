@@ -27,6 +27,7 @@
 #include <winbase.h>
 
 #include <wine/debug.h>
+#include <wine/heap.h>
 #include <wine/unixlib.h>
 
 #include "winebth_priv.h"
