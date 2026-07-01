@@ -69,6 +69,9 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	if grep -q 'Strip path information if the module resides in the system directory' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/proton-eac_bridge.patch; then
 		cp -f proton-eac_bridge.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/
 	fi
+	if grep -q 'ac_cv_header_CL_cl_h' wine-tkg-git/wine-tkg-git/wine-tkg-patches/hotfixes/autoconf-opencl-hotfix/opencl-fixup.mypatch; then
+		cp -f opencl-fixup.mypatch wine-tkg-git/wine-tkg-git/wine-tkg-patches/hotfixes/autoconf-opencl-hotfix/
+	fi
 
 	if [ -z "$HAVE_WINE_VERSION" ]; then
 		cp -r wine-staging wine-tkg-git/wine-tkg-git/src/wine-staging-git
