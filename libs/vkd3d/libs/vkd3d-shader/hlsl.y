@@ -2498,6 +2498,15 @@ static void declare_var(struct hlsl_ctx *ctx, struct parse_variable_def *v)
 
     type = basic_type;
 
+    if (basic_type->class <= HLSL_CLASS_LAST_NUMERIC && basic_type->e.numeric.type == HLSL_TYPE_HALF
+            && !v->arrays.count && ctx->cur_scope == ctx->globals
+            && !(ctx->compatibility_flags & VKD3D_SHADER_COMPILE_OPTION_BACKCOMPAT_ALLOW_HALF_GLOBALS)
+            && ctx->profile->type != VKD3D_SHADER_TYPE_EFFECT)
+    {
+        hlsl_error(ctx, &v->loc, VKD3D_SHADER_ERROR_HLSL_INVALID_TYPE,
+                "The half type is not allowed for global variables.");
+    }
+
     if (hlsl_version_ge(ctx, 5, 1) && hlsl_type_is_resource(type))
     {
         for (i = 0; i < v->arrays.count; ++i)
@@ -3085,9 +3094,7 @@ static bool parse_function_call_arguments(struct hlsl_ctx *ctx, const struct hls
 
         if (param->storage_modifiers & HLSL_STORAGE_IN)
         {
-            if (!hlsl_types_are_equal(arg->data_type, param->data_type))
-                arg = add_cast(ctx, args->instrs, arg, param->data_type, &arg->loc);
-
+            arg = add_cast(ctx, args->instrs, arg, param->data_type, &arg->loc);
             hlsl_block_add_simple_store(ctx, args->instrs, param, arg);
         }
 
