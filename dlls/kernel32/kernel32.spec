@@ -624,7 +624,7 @@
 @ stdcall -import GetConsoleProcessList(ptr long)
 @ stdcall -import GetConsoleScreenBufferInfo(long ptr)
 @ stdcall -import GetConsoleScreenBufferInfoEx(long ptr)
-# @ stub GetConsoleSelectionInfo
+@ stdcall -import GetConsoleSelectionInfo(ptr)
 @ stdcall -import GetConsoleTitleA(ptr long)
 @ stdcall -import GetConsoleTitleW(ptr long)
 @ stdcall -import GetConsoleWindow()
@@ -1509,6 +1509,7 @@
 @ stdcall SetThreadpoolThreadMaximum(ptr long) NTDLL.TpSetPoolMaxThreads
 @ stdcall SetThreadpoolThreadMinimum(ptr long) NTDLL.TpSetPoolMinThreads
 @ stdcall SetThreadpoolTimer(ptr ptr long long) NTDLL.TpSetTimer
+@ stdcall SetThreadpoolTimerEx(ptr ptr long long) NTDLL.TpSetTimerEx
 @ stdcall SetThreadpoolWait(ptr long ptr) NTDLL.TpSetWait
 @ stdcall -import SetTimeZoneInformation(ptr)
 @ stub SetTimerQueueTimer
