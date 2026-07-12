@@ -522,7 +522,7 @@ static void fx_write_context_init(struct hlsl_ctx *ctx, const struct fx_write_co
     rb_init(&fx->strings, string_storage_compare);
     list_init(&fx->types);
 
-    fx->child_effect = fx->ops->are_child_effects_supported && ctx->child_effect;
+    fx->child_effect = fx->ops->are_child_effects_supported && ctx->compile_info.child_effect;
     fx->include_empty_buffers = version == 4 && ctx->include_empty_buffers;
 
     LIST_FOR_EACH_ENTRY(var, &ctx->globals->vars, struct hlsl_ir_var, scope_entry)
