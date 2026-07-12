@@ -312,7 +312,7 @@ struct hlsl_reg
     /* Whether the register has been allocated. */
     bool allocated;
     /* Currently only used for numeric registers. */
-    enum vkd3d_shader_register_type type;
+    enum vsir_register_type type;
 };
 
 /* Types of instruction nodes for the IR.
@@ -1119,6 +1119,7 @@ struct hlsl_buffer
 
 struct hlsl_ctx
 {
+    struct vsir_compile_info compile_info;
     const struct hlsl_profile_info *profile;
 
     struct vkd3d_shader_source_list *source_files;
@@ -1276,8 +1277,6 @@ struct hlsl_ctx
     /* Whether the numthreads() attribute has been provided in the entry-point function. */
     uint32_t found_numthreads : 1;
 
-    enum vkd3d_shader_compile_option_backward_compatibility compatibility_flags;
-    bool child_effect;
     bool include_empty_buffers;
     bool warn_implicit_truncation;
 };
@@ -1684,14 +1683,6 @@ int hlsl_emit_vsir(struct hlsl_ctx *ctx, const struct vkd3d_shader_compile_info 
         struct hlsl_ir_function_decl *entry_func, const struct hlsl_block *initializers,
         struct vsir_program *program, struct vkd3d_shader_code *reflection_data);
 
-bool hlsl_init_deref(struct hlsl_ctx *ctx, struct hlsl_deref *deref, struct hlsl_ir_var *var, unsigned int path_len);
-bool hlsl_init_deref_from_component_index(struct hlsl_ctx *ctx, struct hlsl_block *block, struct hlsl_deref *deref,
-        const struct hlsl_deref *prefix, unsigned int index, const struct vkd3d_shader_location *loc);
-bool hlsl_init_deref_from_index_chain(struct hlsl_ctx *ctx, struct hlsl_deref *deref, struct hlsl_ir_node *chain);
-bool hlsl_copy_deref(struct hlsl_ctx *ctx, struct hlsl_deref *deref, const struct hlsl_deref *other);
-
-void hlsl_cleanup_deref(struct hlsl_deref *deref);
-
 void hlsl_cleanup_semantic(struct hlsl_semantic *semantic);
 bool hlsl_clone_semantic(struct hlsl_ctx *ctx, struct hlsl_semantic *dst, const struct hlsl_semantic *src);
 
@@ -1753,8 +1744,6 @@ struct hlsl_ir_node *hlsl_new_ternary_expr(struct hlsl_ctx *ctx, enum hlsl_ir_ex
 
 bool hlsl_constant_is_zero(struct hlsl_ir_constant *c);
 bool hlsl_constant_is_one(struct hlsl_ir_constant *c);
-
-void hlsl_init_simple_deref_from_var(struct hlsl_deref *deref, struct hlsl_ir_var *var);
 
 struct hlsl_ir_load *hlsl_new_var_load(struct hlsl_ctx *ctx, struct hlsl_ir_var *var,
         const struct vkd3d_shader_location *loc);
@@ -1873,8 +1862,18 @@ unsigned int hlsl_combine_writemasks(unsigned int first, unsigned int second);
 uint32_t hlsl_map_swizzle(uint32_t swizzle, unsigned int writemask);
 uint32_t hlsl_swizzle_from_writemask(unsigned int writemask);
 
+void hlsl_deref_cleanup(struct hlsl_deref *deref);
+bool hlsl_deref_copy(struct hlsl_deref *deref, const struct hlsl_deref *other, struct hlsl_ctx *ctx);
 struct hlsl_type *hlsl_deref_get_type(struct hlsl_ctx *ctx, const struct hlsl_deref *deref);
 enum hlsl_regset hlsl_deref_get_regset(struct hlsl_ctx *ctx, const struct hlsl_deref *deref);
+bool hlsl_deref_init(struct hlsl_deref *deref, struct hlsl_ir_var *var, unsigned int path_len, struct hlsl_ctx *ctx);
+bool hlsl_deref_init_child(struct hlsl_deref *dst, const struct hlsl_deref *src,
+        struct hlsl_ir_node *idx, struct hlsl_ctx *ctx);
+bool hlsl_deref_init_from_component_index(struct hlsl_deref *deref,
+        struct hlsl_block *block, const struct hlsl_deref *prefix, unsigned int index,
+        const struct vkd3d_shader_location *loc, struct hlsl_ctx *ctx);
+bool hlsl_deref_init_from_index_chain(struct hlsl_deref *deref, struct hlsl_ir_node *chain, struct hlsl_ctx *ctx);
+void hlsl_deref_init_simple(struct hlsl_deref *deref, struct hlsl_ir_var *var);
 bool hlsl_component_index_range_from_deref(struct hlsl_ctx *ctx, const struct hlsl_deref *deref,
         unsigned int *start, unsigned int *count);
 bool hlsl_regset_index_from_deref(struct hlsl_ctx *ctx, const struct hlsl_deref *deref,
