@@ -16,7 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-import "d3d10.idl";
+import "d3dcommon.idl";
 
 const unsigned int D3D10_SHADER_DEBUG                           = 0x00001;
 const unsigned int D3D10_SHADER_SKIP_VALIDATION                 = 0x00002;
@@ -73,7 +73,7 @@ typedef struct _D3D10_SHADER_INPUT_BIND_DESC
     UINT BindCount;
     UINT uFlags;
     D3D10_RESOURCE_RETURN_TYPE ReturnType;
-    D3D10_SRV_DIMENSION Dimension;
+    D3D_SRV_DIMENSION Dimension;
     UINT NumSamples;
 } D3D10_SHADER_INPUT_BIND_DESC;
 
@@ -116,7 +116,7 @@ typedef struct _D3D10_SHADER_DESC
     UINT ArrayInstructionCount;
     UINT CutInstructionCount;
     UINT EmitInstructionCount;
-    D3D10_PRIMITIVE_TOPOLOGY GSOutputTopology;
+    D3D_PRIMITIVE_TOPOLOGY GSOutputTopology;
     UINT GSMaxOutputVertexCount;
 } D3D10_SHADER_DESC;
 
@@ -200,6 +200,7 @@ interface ID3D10ShaderReflection : IUnknown
     HRESULT GetOutputParameterDesc(UINT index, D3D10_SIGNATURE_PARAMETER_DESC *desc);
 };
 
+interface ID3D10Device;
 
 HRESULT __stdcall D3D10CompileShader(const char *data, SIZE_T data_size, const char *filename,
         const D3D10_SHADER_MACRO *defines, ID3D10Include *include, const char *entrypoint,
@@ -215,3 +216,5 @@ HRESULT __stdcall D3D10GetInputSignatureBlob(const void *data, SIZE_T data_size,
 HRESULT __stdcall D3D10GetOutputSignatureBlob(const void *data, SIZE_T data_size, ID3D10Blob **blob);
 HRESULT __stdcall D3D10GetInputAndOutputSignatureBlob(const void *data, SIZE_T data_size, ID3D10Blob **blob);
 HRESULT __stdcall D3D10GetShaderDebugInfo(const void *data, SIZE_T data_size, ID3D10Blob **blob);
+
+cpp_quote("#include \"d3d10.h\"")
