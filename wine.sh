@@ -72,6 +72,10 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	if grep -q 'ac_cv_header_CL_cl_h' wine-tkg-git/wine-tkg-git/wine-tkg-patches/hotfixes/autoconf-opencl-hotfix/opencl-fixup.mypatch; then
 		cp -f opencl-fixup.mypatch wine-tkg-git/wine-tkg-git/wine-tkg-patches/hotfixes/autoconf-opencl-hotfix/
 	fi
+	if grep -q 'limit_4g : limit_2g' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/LAA/LAA-unix-wow64.patch; then
+		cp -f LAA-unix-wow64.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/LAA/
+		cp -f LAA-unix-staging-wow64.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/LAA/
+	fi
 
 	if [ -z "$HAVE_WINE_VERSION" ]; then
 		cp -r wine-staging wine-tkg-git/wine-tkg-git/src/wine-staging-git
