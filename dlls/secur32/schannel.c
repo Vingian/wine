@@ -1170,7 +1170,8 @@ static SECURITY_STATUS SEC_ENTRY schan_InitializeSecurityContextW(
     dump_buffer_desc(pInput);
     dump_buffer_desc(pOutput);
 
-    return establish_context(phCredential, phContext, pszTargetName, pInput, fContextReq, TargetDataRep, phNewContext, pOutput, pfContextAttr, ptsExpiry, FALSE);
+    return establish_context(phCredential, phContext, pszTargetName, pInput, fContextReq, TargetDataRep,
+                             phNewContext, pOutput, pfContextAttr, ptsExpiry, FALSE);
 }
 
 /***********************************************************************
@@ -1218,7 +1219,8 @@ static SECURITY_STATUS SEC_ENTRY schan_AcceptSecurityContext(
     dump_buffer_desc(pInput);
     dump_buffer_desc(pOutput);
 
-    return establish_context(phCredential, phContext, NULL, pInput, fContextReq, TargetDataRep, phNewContext, pOutput, pfContextAttr, ptsTimeStamp, TRUE);
+    return establish_context(phCredential, phContext, NULL, pInput, fContextReq, TargetDataRep, phNewContext,
+                             pOutput, pfContextAttr, ptsTimeStamp, TRUE);
 }
 
 static void *get_alg_name(ALG_ID id, BOOL wide)
@@ -1519,8 +1521,8 @@ static SECURITY_STATUS SEC_ENTRY schan_EncryptMessage(PCtxtHandle context_handle
     TRACE("context_handle %p, quality %ld, message %p, message_seq_no %ld\n",
             context_handle, quality, message, message_seq_no);
 
-    if (!context_handle) return SEC_E_INVALID_HANDLE;
-    ctx = schan_get_object(context_handle->dwLower, SCHAN_HANDLE_CTX);
+    if (!context_handle || !(ctx = schan_get_object(context_handle->dwLower, SCHAN_HANDLE_CTX)))
+        return SEC_E_INVALID_HANDLE;
 
     dump_buffer_desc(message);
 
@@ -1655,8 +1657,8 @@ static SECURITY_STATUS SEC_ENTRY schan_DecryptMessage(PCtxtHandle context_handle
     TRACE("context_handle %p, message %p, message_seq_no %ld, quality %p\n",
             context_handle, message, message_seq_no, quality);
 
-    if (!context_handle) return SEC_E_INVALID_HANDLE;
-    ctx = schan_get_object(context_handle->dwLower, SCHAN_HANDLE_CTX);
+    if (!context_handle || !(ctx = schan_get_object(context_handle->dwLower, SCHAN_HANDLE_CTX)))
+        return SEC_E_INVALID_HANDLE;
 
     dump_buffer_desc(message);
 
