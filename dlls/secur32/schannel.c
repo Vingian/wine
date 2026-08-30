@@ -474,7 +474,11 @@ static WCHAR *get_key_container_path(const CERT_CONTEXT *ctx)
         char *str;
         if (!CryptGetProvParam(keyctx.hCryptProv, PP_CONTAINER, NULL, &size, 0)) return NULL;
         if (!(str = malloc(size))) return NULL;
-        if (!CryptGetProvParam(keyctx.hCryptProv, PP_CONTAINER, (BYTE *)str, &size, 0)) return NULL;
+        if (!CryptGetProvParam(keyctx.hCryptProv, PP_CONTAINER, (BYTE *)str, &size, 0))
+        {
+            free(str);
+            return NULL;
+        }
 
         len = MultiByteToWideChar(CP_ACP, 0, str, -1, NULL, 0);
         if (!(ret = malloc(sizeof(L"Software\\Wine\\Crypto\\RSA\\") + len * sizeof(WCHAR))))
