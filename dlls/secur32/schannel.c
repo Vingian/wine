@@ -1284,8 +1284,11 @@ static SECURITY_STATUS ensure_remote_cert(struct schan_context *ctx)
             if (!CertAddEncodedCertificateToStore(store, X509_ASN_ENCODING, blob, sizes[i],
                     CERT_STORE_ADD_REPLACE_EXISTING, i ? NULL : &cert))
             {
+                status = GetLastError();
                 if (i) CertFreeCertificateContext(cert);
-                return GetLastError();
+                free(params.buffer);
+                CertCloseStore(store, 0);
+                return status;
             }
             blob += sizes[i];
         }
