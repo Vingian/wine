@@ -569,7 +569,7 @@ static enum buffer_mask buffer_mask_from_enum( GLenum buffer )
     {
     case GL_BACK:           return MASK_BACK;
     case GL_BACK_LEFT:      return MASK_BACK_LEFT;
-    case GL_BACK_RIGHT:     return MASK_BACK_LEFT;
+    case GL_BACK_RIGHT:     return MASK_BACK_RIGHT;
     case GL_FRONT:          return MASK_FRONT;
     case GL_FRONT_LEFT:     return MASK_FRONT_LEFT;
     case GL_FRONT_RIGHT:    return MASK_FRONT_RIGHT;
