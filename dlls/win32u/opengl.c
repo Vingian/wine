@@ -3058,7 +3058,7 @@ static BOOL query_renderer_integer( struct egl_platform *egl, GLenum attribute, 
     case WGL_RENDERER_DEVICE_ID_WINE: *value = egl->device_id; return TRUE;
     case WGL_RENDERER_VENDOR_ID_WINE: *value = egl->vendor_id; return TRUE;
     case WGL_RENDERER_UNIFIED_MEMORY_ARCHITECTURE_WINE: *value = 0; return TRUE;
-    case WGL_RENDERER_VERSION_WINE: memcpy( value, egl->version, 3 ); return TRUE;
+    case WGL_RENDERER_VERSION_WINE: memcpy( value, egl->version, sizeof(egl->version) ); return TRUE;
     case WGL_RENDERER_OPENGL_COMPATIBILITY_PROFILE_VERSION_WINE:
         value[0] = egl->compat_version / 10;
         value[1] = egl->compat_version % 10;
