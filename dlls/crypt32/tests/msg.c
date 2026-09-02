@@ -2871,7 +2871,7 @@ static void test_decode_msg_get_param(void)
         compare_signer_info((CMSG_SIGNER_INFO *)buf, &signer);
         CryptMemFree(buf);
     }
-    size = 0;
+    size = 0xdeadbeef;
     SetLastError(0xdeadbeef);
     ret = CryptMsgGetParam(msg, CMSG_SIGNER_UNAUTH_ATTR_PARAM, 0, NULL, &size);
     ok(!ret, "CryptMsgGetParam succeeded unexpectedly\n");
