@@ -2528,7 +2528,7 @@ NTSTATUS WINAPI TpAllocIoCompletion( TP_IO **out, HANDLE file, PTP_IO_CALLBACK c
     {
         tp_threadpool_unlock( pool );
         RtlFreeHeap( GetProcessHeap(), 0, object );
-        return status;
+        return STATUS_NO_MEMORY;
     }
 
     if ((status = tp_ioqueue_lock( object, file )))
