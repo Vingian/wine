@@ -2878,6 +2878,7 @@ static void test_decode_msg_get_param(void)
     ok(GetLastError() == CRYPT_E_ATTRIBUTES_MISSING, "unexpected error %08lx\n", GetLastError());
     ok(size == 0, "unexpected size: %lu\n", size);
     SetLastError(0xdeadbeef);
+    size = 0xdeadbeef;
     ret = CryptMsgGetParam(msg, CMSG_SIGNER_AUTH_ATTR_PARAM, 0, NULL, &size);
     ok(!ret, "CryptMsgGetParam succeeded unexpectedly\n");
     ok(GetLastError() == CRYPT_E_ATTRIBUTES_MISSING, "unexpected error %08lx\n", GetLastError());
