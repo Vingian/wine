@@ -377,7 +377,7 @@ static NTSTATUS ntlm_pool_get_ctx( BOOL reset_password, char **argv, struct ntlm
         p[len] = ' ';
         p += len + 1;
     }
-    *p = 0;
+    p[-1] = 0;
 
     EnterCriticalSection( &ntlm_pool_cs );
     LIST_FOR_EACH_ENTRY( cur, &ntlm_pool, struct ntlm_pool_elem, entry )
