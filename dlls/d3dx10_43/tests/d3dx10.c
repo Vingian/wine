@@ -7924,7 +7924,6 @@ static void test_sprite(void)
 
     /* Flush/End */
     hr = ID3DX10Sprite_Flush(sprite);
-    todo_wine
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 
     hr = ID3DX10Sprite_End(sprite);
@@ -7959,11 +7958,9 @@ static void test_sprite(void)
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 
     hr = ID3DX10Sprite_Flush(sprite);
-    todo_wine
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 
     hr = ID3DX10Sprite_Flush(sprite);
-    todo_wine
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 
     hr = ID3DX10Sprite_End(sprite);
@@ -7982,7 +7979,6 @@ static void test_sprite(void)
     ok(get_refcount(srv1) > refcount, "Unexpected refcount.\n");
 
     hr = ID3DX10Sprite_Flush(sprite);
-    todo_wine
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
     ok(get_refcount(srv1) == refcount, "Unexpected refcount.\n");
 
@@ -8163,22 +8159,17 @@ static void test_sprite_render(void)
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 
     hr = ID3DX10Sprite_Flush(sprite);
-    todo_wine
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
     hr = ID3DX10Sprite_End(sprite);
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 
     color = get_texture_color(test_context.backbuffer, 160, 120);
-    todo_wine
     ok(compare_color(color, 0xff0000ff, 0), "Got unexpected color 0x%08x.\n", color);
     color = get_texture_color(test_context.backbuffer, 480, 120);
-    todo_wine
     ok(compare_color(color, 0xffff00ff, 0), "Got unexpected color 0x%08x.\n", color);
     color = get_texture_color(test_context.backbuffer, 160, 360);
-    todo_wine
     ok(compare_color(color, 0xffff0000, 0), "Got unexpected color 0x%08x.\n", color);
     color = get_texture_color(test_context.backbuffer, 480, 360);
-    todo_wine
     ok(compare_color(color, 0xff00ffff, 0), "Got unexpected color 0x%08x.\n", color);
 
     /* Immediate draws with sprites in the batch */
@@ -8219,13 +8210,11 @@ static void test_sprite_render(void)
     sprite_desc.TexSize.x = 0.25f;
     sprite_desc.TexSize.y = 0.25f;
     hr = ID3DX10Sprite_DrawSpritesImmediate(sprite, &sprite_desc, 1, sizeof(sprite_desc), 0);
-    todo_wine
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 
     color = get_texture_color(test_context.backbuffer, 160, 120);
     ok(compare_color(color, 0xffffffff, 0), "Got unexpected color 0x%08x.\n", color);
     color = get_texture_color(test_context.backbuffer, 480, 120);
-    todo_wine
     ok(compare_color(color, 0xffff00ff, 0), "Got unexpected color 0x%08x.\n", color);
     color = get_texture_color(test_context.backbuffer, 160, 360);
     ok(compare_color(color, 0xffffffff, 0), "Got unexpected color 0x%08x.\n", color);
@@ -8263,19 +8252,15 @@ static void test_sprite_render(void)
     hr = ID3DX10Sprite_Begin(sprite, 0);
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
     hr = ID3DX10Sprite_DrawSpritesImmediate(sprite, &sprite_desc, 1, 0, 0);
-    todo_wine
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
     hr = ID3DX10Sprite_End(sprite);
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
 
     color = get_texture_color(test_context.backbuffer, 320, 235);
-    todo_wine
     ok(compare_color(color, 0x7b7b7b7b, 1), "Got unexpected color 0x%08x.\n", color);
     color = get_texture_color(test_context.backbuffer, 320, 240);
-    todo_wine
     ok(compare_color(color, 0x80808080, 1), "Got unexpected color 0x%08x.\n", color);
     color = get_texture_color(test_context.backbuffer, 320, 245);
-    todo_wine
     ok(compare_color(color, 0x85858585, 1), "Got unexpected color 0x%08x.\n", color);
 
     ID3D10Texture2D_Release(texture);
