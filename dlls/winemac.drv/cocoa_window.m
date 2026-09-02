@@ -942,7 +942,6 @@ static inline BOOL stage_manager_enabled(void)
         [window setHidesOnDeactivate:NO];
         [window setReleasedWhenClosed:NO];
 
-        [window setOneShot:YES];
         [window disableCursorRects];
         [window setShowsResizeIndicator:NO];
         [window setHasShadow:wf->shadow];
