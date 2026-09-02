@@ -25,6 +25,14 @@
 #include <stdint.h>
 #include <assert.h>
 
+static const D3DXMATRIX identity =
+{
+    ._11 = 1.0f,
+    ._22 = 1.0f,
+    ._33 = 1.0f,
+    ._44 = 1.0f,
+};
+
 #define SWAPCHAIN_FLAG_SHADER_INPUT             0x1
 
 struct swapchain_desc
@@ -7825,13 +7833,6 @@ static void test_sprite(void)
     D3DXMATRIX mat, mat2;
     ULONG refcount;
     HRESULT hr;
-    static const D3DXMATRIX identity =
-    {
-        ._11 = 1.0f,
-        ._22 = 1.0f,
-        ._33 = 1.0f,
-        ._44 = 1.0f,
-    };
 
     if (!(device = create_device()))
     {
@@ -8180,9 +8181,52 @@ static void test_sprite_render(void)
     todo_wine
     ok(compare_color(color, 0xff00ffff, 0), "Got unexpected color 0x%08x.\n", color);
 
-    ID3DX10Sprite_Release(sprite);
     ID3D10Texture2D_Release(texture);
     ID3D10ShaderResourceView_Release(srv);
+
+    /* Testing sampler filtering mode */
+    texture_desc.Width = 16;
+    texture_desc.Height = 16;
+
+    resource_data.pSysMem = a8r8g8b8_16_16;
+    resource_data.SysMemPitch = texture_desc.Width * 4;
+    resource_data.SysMemSlicePitch = 0;
+    hr = ID3D10Device_CreateTexture2D(device, &texture_desc, &resource_data, &texture);
+    ok(hr == S_OK, "Failed to create texture, hr %#lx.\n", hr);
+
+    hr = ID3D10Device_CreateShaderResourceView(device, (ID3D10Resource *)texture, NULL, &srv);
+    ok(hr == S_OK, "Failed to create srv, hr %#lx.\n", hr);
+
+    ID3D10Device_ClearRenderTargetView(device, test_context.backbuffer_rtv, clear);
+
+    sprite_desc.TexCoord.x = 0.0f;
+    sprite_desc.TexCoord.y = 0.0f;
+    sprite_desc.TexSize.x = 1.0f;
+    sprite_desc.TexSize.y = 1.0f;
+    sprite_desc.pTexture = srv;
+    sprite_desc.matWorld = identity;
+
+    hr = ID3DX10Sprite_Begin(sprite, 0);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    hr = ID3DX10Sprite_DrawSpritesImmediate(sprite, &sprite_desc, 1, 0, 0);
+    todo_wine
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    hr = ID3DX10Sprite_End(sprite);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+
+    color = get_texture_color(test_context.backbuffer, 320, 235);
+    todo_wine
+    ok(compare_color(color, 0x7b7b7b7b, 1), "Got unexpected color 0x%08x.\n", color);
+    color = get_texture_color(test_context.backbuffer, 320, 240);
+    todo_wine
+    ok(compare_color(color, 0x80808080, 1), "Got unexpected color 0x%08x.\n", color);
+    color = get_texture_color(test_context.backbuffer, 320, 245);
+    todo_wine
+    ok(compare_color(color, 0x85858585, 1), "Got unexpected color 0x%08x.\n", color);
+
+    ID3D10Texture2D_Release(texture);
+    ID3D10ShaderResourceView_Release(srv);
+    ID3DX10Sprite_Release(sprite);
     release_test_context(&test_context);
 }
 
