@@ -5051,7 +5051,7 @@ static GpStatus METAFILE_AddPenObject(GpMetafile *metafile, GpPen *pen, DWORD *i
     }
     if (data_flags & PenDataNonCenter)
     {
-        *(REAL*)(pen_data->OptionalData + i) = pen->align;
+        *(DWORD*)(pen_data->OptionalData + i) = pen->align;
         i += sizeof(DWORD);
     }
     if (data_flags & PenDataCustomStartCap)
