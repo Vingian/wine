@@ -180,7 +180,7 @@ ULONG CDECL ldap_get_paged_count( LDAP *ld, LDAPSearch *search, ULONG *count, WL
         return WLDAP32_LDAP_SUCCESS;
     }
 
-    free( search->cookie );
+    if (search->cookie != &null_cookieW) free( search->cookie );
     search->cookie = NULL;
 
     ret = ldap_parse_page_controlW( ld, server_ctrls, count, &search->cookie );
@@ -266,7 +266,7 @@ ULONG CDECL ldap_search_abandon_page( LDAP *ld, LDAPSearch *search )
     while (*ctrls) controlfreeW( *ctrls++ );
     free( search->serverctrls );
     controlarrayfreeW( search->clientctrls );
-    if (search->cookie && search->cookie != &null_cookieW) free( search->cookie );
+    if (search->cookie != &null_cookieW) free( search->cookie );
     free( search );
 
     return WLDAP32_LDAP_SUCCESS;
