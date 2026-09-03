@@ -1143,11 +1143,11 @@ INT WINAPI PropVariantCompareEx(REFPROPVARIANT propvar1, REFPROPVARIANT propvar2
         if (res) res = res > 0 ? 1 : -1;
         break;
     case VT_VECTOR | VT_UI1:
-        count = min(propvar1->caub.cElems, propvar2->caub.cElems);
-        res = count ? memcmp(propvar1->caub.pElems, propvar2->caub.pElems, sizeof(*propvar1->caub.pElems) * count) : 0;
+        count = min(propvar1->caub.cElems, propvar2_converted->caub.cElems);
+        res = count ? memcmp(propvar1->caub.pElems, propvar2_converted->caub.pElems, sizeof(*propvar1->caub.pElems) * count) : 0;
         if (res) res = res > 0 ? 1 : -1;
-        if (!res && propvar1->caub.cElems != propvar2->caub.cElems)
-            res = propvar1->caub.cElems > propvar2->caub.cElems ? 1 : -1;
+        if (!res && propvar1->caub.cElems != propvar2_converted->caub.cElems)
+            res = propvar1->caub.cElems > propvar2_converted->caub.cElems ? 1 : -1;
         break;
     default:
         FIXME("vartype %#x not handled\n", propvar1->vt);
