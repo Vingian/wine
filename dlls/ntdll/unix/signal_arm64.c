@@ -117,6 +117,11 @@ static DWORD64 get_fault_esr( ucontext_t *sigcontext )
     return 0;
 }
 
+static DWORD64 make_esr( ULONG ec, ULONG info )
+{
+    return ((DWORD64)ec << 26) | (info & 0xffff);
+}
+
 #elif defined(__APPLE__)
 
 /* All Registers access - only for local access */
@@ -213,11 +218,6 @@ C_ASSERT( sizeof( struct syscall_frame ) == 0x330 );
 #define ESR_ELx_ISS_BRK_COMMENT(esr)    ((esr) & 0xffff)
 #define ESR_ELx_ISS_DFSC(esr)           ((esr) & 0x3f)
 #define ESR_ELx_ISS_DFSC_ALIGN_FAULT    0x21
-
-static DWORD64 make_esr( ULONG ec, ULONG info )
-{
-    return ((DWORD64)ec << 26) | (info & 0xffff);
-}
 
 /***********************************************************************
  *           context_init_empty_xstate
