@@ -1139,7 +1139,7 @@ INT WINAPI PropVariantCompareEx(REFPROPVARIANT propvar1, REFPROPVARIANT propvar2
             res = lstrcmpA(propvar1->pszVal, propvar2_converted->pszVal);
         break;
     case VT_CLSID:
-        res = memcmp(propvar1->puuid, propvar2->puuid, sizeof(*propvar1->puuid));
+        res = memcmp(propvar1->puuid, propvar2_converted->puuid, sizeof(*propvar1->puuid));
         if (res) res = res > 0 ? 1 : -1;
         break;
     case VT_VECTOR | VT_UI1:

@@ -886,7 +886,6 @@ static void test_PropVariantCompareEx(void)
     var1.pwszVal = buff;
     wcscpy(buff, L"{deadbeef-dead-beef-dead-beefcafebabe}");
     res = PropVariantCompareEx(&clsid, &var1, 0, 0);
-    todo_wine
     ok(res == 0, "res=%i\n", res);
 
     /* VT_R4/VT_R8 */
