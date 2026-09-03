@@ -306,19 +306,11 @@ LDAPSearch * CDECL ldap_search_init_pageW( LDAP *ld, WCHAR *dn, ULONG scope, WCH
     search->serverctrls[0] = NULL; /* reserve 0 for page control */
     for (i = 0; i < len; i++)
     {
-        if (!(search->serverctrls[i + 1] = controldupW( serverctrls[i] )))
-        {
-            for (; i > 0; i--) controlfreeW( search->serverctrls[i] );
-            goto fail;
-        }
+        if (!(search->serverctrls[i + 1] = controldupW( serverctrls[i] ))) goto fail;
     }
     search->serverctrls[len + 1] = NULL;
 
-    if (clientctrls && !(search->clientctrls = controlarraydupW( clientctrls )))
-    {
-        for (i = 0; i < len; i++) controlfreeW( search->serverctrls[i] );
-        goto fail;
-    }
+    if (clientctrls && !(search->clientctrls = controlarraydupW( clientctrls ))) goto fail;
 
     search->scope           = scope;
     search->attrsonly       = attrsonly;
