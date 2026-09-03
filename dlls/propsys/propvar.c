@@ -858,13 +858,10 @@ HRESULT WINAPI InitPropVariantFromStringVector(PCWSTR *strs, ULONG count, PROPVA
 
     for (i = 0; i < count; ++i)
     {
-        if (strs[i])
+        if (!(ppropvar->calpwstr.pElems[i] = CoTaskMemAlloc((wcslen(strs[i]) + 1)*sizeof(**strs))))
         {
-            if (!(ppropvar->calpwstr.pElems[i] = CoTaskMemAlloc((wcslen(strs[i]) + 1)*sizeof(**strs))))
-            {
-                PropVariantClear(ppropvar);
-                return E_OUTOFMEMORY;
-            }
+            PropVariantClear(ppropvar);
+            return E_OUTOFMEMORY;
         }
         wcscpy(ppropvar->calpwstr.pElems[i], strs[i]);
         ppropvar->calpwstr.cElems++;
