@@ -7476,6 +7476,91 @@ static void test_file_map_large_size(void)
     DeleteFileA(source);
 }
 
+static void test_find_file(void)
+{
+    IO_STATUS_BLOCK io;
+    UNICODE_STRING nameW;
+    OBJECT_ATTRIBUTES attr;
+    WIN32_FIND_DATAW find_data;
+    WCHAR filter[MAX_PATH];
+    WCHAR path[MAX_PATH];
+    WCHAR file1[MAX_PATH];
+    WCHAR file2[MAX_PATH];
+    NTSTATUS status;
+    HANDLE handle;
+    BOOL deleted;
+    UINT ret;
+
+    GetTempPathW(MAX_PATH, path);
+    lstrcatW(path, L"findfiletest");
+    CreateDirectoryW(path, NULL);
+
+    ret = GetTempFileNameW(path, L"pfx", 0, file1);
+    ok(!!ret, "GetTempFileName() error %lu\n", GetLastError());
+
+    ret = GetTempFileNameW(path, L"pfx", 0, file2);
+    ok(!!ret, "GetTempFileName() error %lu\n", GetLastError());
+
+    swprintf(filter, ARRAY_SIZE(filter), L"%s\\*.*", path);
+    handle = FindFirstFileW(filter, &find_data);
+    ok(handle != INVALID_HANDLE_VALUE, "FindFirstFileW error %lu\n", GetLastError());
+
+    do
+    {
+        if (find_data.cFileName[0] == '.')
+            continue;
+        /* break while FindFirstFileW holding open handle */
+        break;
+    }
+    while (FindNextFileW(handle, &find_data));
+
+    /* simulate SHFileOperationW(FO_MOVE) on directory being searched */
+    DeleteFileW(file2);
+    DeleteFileW(file1);
+
+    deleted = RemoveDirectoryW(path);
+    todo_wine
+    ok(deleted, "RemoveDirectoryW failed with error %lu\n", GetLastError());
+
+    FindClose(handle);
+    RemoveDirectoryW(path);
+    deleted = GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES;
+    ok(deleted, "Should not exist %ls\n", path);
+
+    /* simulate with Nt calls */
+    CreateDirectoryW(path, NULL);
+
+    pRtlDosPathNameToNtPathName_U(path, &nameW, NULL, NULL );
+    InitializeObjectAttributes(&attr, &nameW, OBJ_CASE_INSENSITIVE, 0, NULL);
+
+    handle = NULL;
+    status = pNtOpenFile(&handle, FILE_LIST_DIRECTORY | SYNCHRONIZE, &attr, &io,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE,
+                         FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(!status, "NtOpenFile %s failed %lx\n", wine_dbgstr_w(nameW.Buffer), status);
+
+    SetLastError(0xdeadbeef);
+    deleted = RemoveDirectoryW(path);
+    ok(!deleted, "RemoveDirectoryW should have failed\n");
+    ok(GetLastError() == ERROR_SHARING_VIOLATION, "got %lu\n", GetLastError());
+
+    pNtClose(handle);
+
+    /* recreate with FILE_SHARE_DELETE */
+    handle = NULL;
+    status = pNtOpenFile(&handle, FILE_LIST_DIRECTORY | SYNCHRONIZE, &attr, &io,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                         FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(!status, "NtOpenFile %s failed %lx\n", wine_dbgstr_w(nameW.Buffer), status);
+
+    SetLastError(0xdeadbeef);
+    deleted = RemoveDirectoryW(path);
+    ok(deleted, "RemoveDirectoryW failed with error %lu\n", GetLastError());
+
+    pRtlFreeUnicodeString( &nameW );
+    pNtClose(handle);
+}
+
 START_TEST(file)
 {
     HMODULE hkernel32 = GetModuleHandleA("kernel32.dll");
@@ -7557,4 +7642,5 @@ START_TEST(file)
     test_mailslot_name();
     test_reparse_points();
     test_file_map_large_size();
+    test_find_file();
 }
