@@ -7519,11 +7519,10 @@ static void test_find_file(void)
     DeleteFileW(file1);
 
     deleted = RemoveDirectoryW(path);
-    todo_wine
     ok(deleted, "RemoveDirectoryW failed with error %lu\n", GetLastError());
 
     FindClose(handle);
-    RemoveDirectoryW(path);
+
     deleted = GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES;
     ok(deleted, "Should not exist %ls\n", path);
 
