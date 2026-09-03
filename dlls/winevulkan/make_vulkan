@@ -1777,11 +1777,17 @@ class Record(Type):
 
     @staticmethod
     def from_xml(struct):
-        if struct.attrib["name"] == "VkPhysicalDeviceVulkan14Properties":
-            del struct.attrib["returnedonly"]
         returnedonly = "returnedonly" in struct.attrib
         members = filter(is_api_supported, struct.findall("member"))
         members = [VkMember.from_xml(member, returnedonly) for member in members]
+
+        # don't flag dynamic arrays with input/output lengths as returnedonly
+        for member in filter(lambda m: m.returnedonly, members):
+            for len in filter(lambda m: m.name == member.dyn_array_len, members):
+                len.returnedonly = False
+            if member.is_dynamic_array():
+                member.returnedonly = False
+
         return Record(members, **struct.attrib)
 
     @property
