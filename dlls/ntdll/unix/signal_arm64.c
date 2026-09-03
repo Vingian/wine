@@ -332,14 +332,28 @@ static void save_context( CONTEXT *context, const ucontext_t *sigcontext )
  *
  * Build a sigcontext from the register values.
  */
-static void restore_context( const CONTEXT *context, ucontext_t *sigcontext )
+static void restore_context( struct thread_data *data, const CONTEXT *context, ucontext_t *sigcontext )
 {
     DWORD i;
 
+    if (is_emulated_code( context->Pc ))
+    {
+        CONTEXT *user_context = (CONTEXT *)((context->Sp - sizeof(CONTEXT)) & ~15);
+
+        data->teb->ChpeV2CpuAreaInfo->InSimulation = 1;
+        *user_context = *context;
+        user_context->ContextFlags = CONTEXT_FULL;
+        SP_sig(sigcontext) = (ULONG_PTR)user_context;
+        PC_sig(sigcontext) = (ULONG_PTR)pKiUserEmulationDispatcher;
+    }
+    else
+    {
+        SP_sig(sigcontext) = context->Sp;   /* Stack pointer */
+        PC_sig(sigcontext) = context->Pc;   /* Program Counter */
+    }
+
     FP_sig(sigcontext)     = context->Fp;   /* Frame pointer */
     LR_sig(sigcontext)     = context->Lr;   /* Link register */
-    SP_sig(sigcontext)     = context->Sp;   /* Stack pointer */
-    PC_sig(sigcontext)     = context->Pc;   /* Program Counter */
     PSTATE_sig(sigcontext) = context->Cpsr; /* Current State Register */
     for (i = 0; i <= 28; i++) REGn_sig( i, sigcontext ) = context->X[i];
     restore_fpu( context, sigcontext );
@@ -765,7 +779,7 @@ static void setup_raise_exception( struct thread_data *data, ucontext_t *sigcont
     status = send_debug_event( data, rec, context, TRUE, TRUE );
     if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
     {
-        restore_context( context, sigcontext );
+        restore_context( data, context, sigcontext );
         return;
     }
 
@@ -1454,17 +1468,7 @@ static void usr1_handler( int signal, siginfo_t *siginfo, void *_sigcontext )
         save_context( &context, sigcontext );
         context.ContextFlags |= CONTEXT_EXCEPTION_REPORTING;
         wait_suspend( &context );
-        if (is_emulated_code( context.Pc ))
-        {
-            CONTEXT *user_context = (CONTEXT *)((context.Sp - sizeof(CONTEXT)) & ~15);
-
-            chpe->InSimulation = 1;
-            *user_context = context;
-            user_context->ContextFlags = CONTEXT_FULL;
-            context.Sp = (ULONG_PTR)user_context;
-            context.Pc = (ULONG_PTR)pKiUserEmulationDispatcher;
-        }
-        restore_context( &context, sigcontext );
+        restore_context( data, &context, sigcontext );
     }
 }
 
