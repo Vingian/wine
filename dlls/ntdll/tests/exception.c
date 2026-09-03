@@ -11541,7 +11541,7 @@ static void test_extended_context(void)
         ok(xs->Mask == bret ? 4 : 0xdeadbeef, "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
         mask = pRtlGetExtendedFeaturesMask(context_ex);
         ok(mask == (xs->Mask & ~(ULONG64)3), "Got unexpected mask %s.\n", wine_dbgstr_longlong(mask));
-        ok(xs->CompactionMask == bret ? expected_compaction : 0xdeadbeef, "Got unexpected CompactionMask %s.\n",
+        ok(xs->CompactionMask == 0xdeadbeef, "Got unexpected CompactionMask %s.\n",
                 wine_dbgstr_longlong(xs->CompactionMask));
 
         mask = 0xdeadbeef;
@@ -11583,7 +11583,8 @@ static void test_extended_context(void)
 
             length2 = 0xdeadbeef;
             p = pLocateXStateFeature(context, 2, &length2);
-            ok(!p && length2 == (flags & CONTEXT_NATIVE) ? sizeof(YMMCONTEXT) : 0xdeadbeef,
+            ok((!p && length2 == ((flags & CONTEXT_NATIVE) ? sizeof(YMMCONTEXT) : 0xdeadbeef))
+               || broken(p && length2 == sizeof(YMMCONTEXT)) /* some win10 versions */,
                     "Got unexpected p %p, length %#lx, flags %#lx.\n", p, length2, flags);
 
             context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
