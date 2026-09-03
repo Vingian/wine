@@ -545,10 +545,8 @@ Call ok("ab " & empty = "ab ", """ab"" & empty = " & ("ab " & empty))
 Call ok(1 & 100000 = "1100000", "1 & 100000 = " & (1 & 100000))
 Call ok("ab" & x = "abxx", """ab"" & x = " & ("ab"&x))
 
-if(isEnglishLang) then
-    Call ok("" & true = "True", """"" & true = " & true)
-    Call ok(true & false = "TrueFalse", "true & false = " & (true & false))
-end if
+Call ok("" & true = "True", """"" & true = " & true)
+Call ok(true & false = "TrueFalse", "true & false = " & (true & false))
 
 call ok(true and true, "true and true is not true")
 call ok(true and not false, "true and not false is not true")
