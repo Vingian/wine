@@ -114,6 +114,12 @@ struct __GLsync
     UINT64                      unix_handle;
 };
 
+struct opengl_wow64_str
+{
+    UINT    len;
+    GLubyte ptr[];
+};
+
 #ifdef WINE_UNIX_LIB
 
 #include "wine/gdi_driver.h"
