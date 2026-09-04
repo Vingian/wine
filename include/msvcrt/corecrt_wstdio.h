@@ -75,7 +75,6 @@ _ACRTIMP wint_t   __cdecl fgetwc(FILE*);
 _ACRTIMP wchar_t* __cdecl fgetws(wchar_t*,int,FILE*);
 _ACRTIMP wint_t   __cdecl fputwc(wint_t,FILE*);
 _ACRTIMP int      __cdecl fputws(const wchar_t*,FILE*);
-_ACRTIMP int      __cdecl fputws(const wchar_t*,FILE*);
 _ACRTIMP wint_t   __cdecl getwc(FILE*);
 _ACRTIMP wint_t   __cdecl getwchar(void);
 _ACRTIMP wchar_t* __cdecl getws(wchar_t*);
