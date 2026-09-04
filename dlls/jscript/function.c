@@ -187,7 +187,7 @@ static HRESULT Arguments_gc_traverse(struct gc_ctx *gc_ctx, enum gc_traverse_op 
 
     if(arguments->buf) {
         for(i = 0; i < arguments->argc; i++) {
-            hres = gc_process_linked_val(gc_ctx, op, jsdisp, &arguments->buf[i]);
+            hres = gc_process_linked_val(gc_ctx, op, &arguments->buf[i]);
             if(FAILED(hres))
                 return hres;
         }
@@ -1305,7 +1305,7 @@ static HRESULT BindFunction_gc_traverse(struct gc_ctx *gc_ctx, enum gc_traverse_
     unsigned i;
 
     for(i = 0; i < function->argc; i++) {
-        hres = gc_process_linked_val(gc_ctx, op, &function->function.dispex, &function->args[i]);
+        hres = gc_process_linked_val(gc_ctx, op, &function->args[i]);
         if(FAILED(hres))
             return hres;
     }
@@ -1314,7 +1314,7 @@ static HRESULT BindFunction_gc_traverse(struct gc_ctx *gc_ctx, enum gc_traverse_
     if(FAILED(hres))
         return hres;
 
-    return gc_process_linked_val(gc_ctx, op, &function->function.dispex, &function->this);
+    return gc_process_linked_val(gc_ctx, op, &function->this);
 }
 
 static const function_vtbl_t BindFunctionVtbl = {

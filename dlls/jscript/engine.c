@@ -531,7 +531,7 @@ static HRESULT scope_gc_traverse(struct gc_ctx *gc_ctx, enum gc_traverse_op op, 
         unsigned i, cnt = vars->argc;
 
         for(i = 0; i < cnt; i++) {
-            hres = gc_process_linked_val(gc_ctx, op, dispex, &vars->var[i]);
+            hres = gc_process_linked_val(gc_ctx, op, &vars->var[i]);
             if(FAILED(hres))
                 return hres;
         }
