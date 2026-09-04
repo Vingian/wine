@@ -194,7 +194,7 @@ static HRESULT Arguments_gc_traverse(struct gc_ctx *gc_ctx, enum gc_traverse_op 
     }
 
     if(arguments->scope) {
-        hres = gc_process_linked_obj(gc_ctx, op, jsdisp, &arguments->scope->dispex, (void**)&arguments->scope);
+        hres = gc_process_linked_obj(gc_ctx, op, &arguments->scope->dispex, (void**)&arguments->scope);
         if(FAILED(hres))
             return hres;
     }
@@ -942,8 +942,7 @@ static HRESULT InterpretedFunction_gc_traverse(struct gc_ctx *gc_ctx, enum gc_tr
 
     if(!function->scope_chain)
         return S_OK;
-    return gc_process_linked_obj(gc_ctx, op, &function->function.dispex, &function->scope_chain->dispex,
-                                 (void**)&function->scope_chain);
+    return gc_process_linked_obj(gc_ctx, op, &function->scope_chain->dispex, (void**)&function->scope_chain);
 }
 
 static const function_vtbl_t InterpretedFunctionVtbl = {
@@ -1311,7 +1310,7 @@ static HRESULT BindFunction_gc_traverse(struct gc_ctx *gc_ctx, enum gc_traverse_
             return hres;
     }
 
-    hres = gc_process_linked_obj(gc_ctx, op, &function->function.dispex, &function->target->dispex, (void**)&function->target);
+    hres = gc_process_linked_obj(gc_ctx, op, &function->target->dispex, (void**)&function->target);
     if(FAILED(hres))
         return hres;
 

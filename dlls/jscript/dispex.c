@@ -1102,7 +1102,7 @@ HRESULT gc_run(script_ctx_t *ctx)
     return S_OK;
 }
 
-HRESULT gc_process_linked_obj(struct gc_ctx *gc_ctx, enum gc_traverse_op op, jsdisp_t *obj, jsdisp_t *link, void **unlink_ref)
+HRESULT gc_process_linked_obj(struct gc_ctx *gc_ctx, enum gc_traverse_op op, jsdisp_t *link, void **unlink_ref)
 {
     if(op == GC_TRAVERSE_UNLINK) {
         *unlink_ref = NULL;
