@@ -404,7 +404,7 @@ static PSecPkgInfoA _copyPackageInfoFlatWToA(const SecPkgInfoW *infoW)
             if (infoW->Comment)
             {
                 ret->Comment = nextString;
-                WideCharToMultiByte(CP_ACP, 0, infoW->Comment, -1, nextString, nameLen, NULL, NULL);
+                WideCharToMultiByte(CP_ACP, 0, infoW->Comment, -1, nextString, commentLen, NULL, NULL);
             }
             else
                 ret->Comment = NULL;
