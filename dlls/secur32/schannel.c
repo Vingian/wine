@@ -743,8 +743,12 @@ static SECURITY_STATUS acquire_credentials_handle(ULONG fCredentialUse,
     free(key_blob);
     if (status) goto fail;
 
-    handle = schan_alloc_handle(creds, SCHAN_HANDLE_CRED);
-    if (handle == SCHAN_INVALID_HANDLE) goto fail;
+    if ((handle = schan_alloc_handle(creds, SCHAN_HANDLE_CRED)) == SCHAN_INVALID_HANDLE)
+    {
+        struct free_certificate_credentials_params free_params = { creds };
+        GNUTLS_CALL( free_certificate_credentials, &free_params );
+        goto fail;
+    }
 
     phCredential->dwLower = handle;
     phCredential->dwUpper = 0;
