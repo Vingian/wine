@@ -49,6 +49,7 @@
 #include "vkd3d_common.h"
 #include "vkd3d_memory.h"
 #include "vkd3d_shader.h"
+#include "vkd3d_string.h"
 #include "wine/list.h"
 
 #include <inttypes.h>
@@ -317,7 +318,7 @@ static inline enum vkd3d_result vkd3d_result_from_shader_error(enum vkd3d_shader
     }
 }
 
-enum vkd3d_shader_opcode
+enum vsir_opcode
 {
     VSIR_OP_ABS,
     VSIR_OP_ACOS,
@@ -661,19 +662,19 @@ enum vkd3d_shader_opcode
     VSIR_OP_COUNT,
 };
 
-const char *vsir_opcode_get_name(enum vkd3d_shader_opcode op, const char *error);
+const char *vsir_opcode_get_name(enum vsir_opcode op, const char *error);
 
-static inline bool vsir_opcode_is_fork_or_join_phase(enum vkd3d_shader_opcode op)
+static inline bool vsir_opcode_is_fork_or_join_phase(enum vsir_opcode op)
 {
     return op == VSIR_OP_HS_FORK_PHASE || op == VSIR_OP_HS_JOIN_PHASE;
 }
 
-static inline bool vsir_opcode_is_control_point_phase(enum vkd3d_shader_opcode op)
+static inline bool vsir_opcode_is_control_point_phase(enum vsir_opcode op)
 {
     return op == VSIR_OP_HS_CONTROL_POINT_PHASE;
 }
 
-static inline bool vsir_opcode_is_imm_atomic(enum vkd3d_shader_opcode op)
+static inline bool vsir_opcode_is_imm_atomic(enum vsir_opcode op)
 {
     return VSIR_OP_IMM_ATOMIC_ALLOC <= op && op <= VSIR_OP_IMM_ATOMIC_XOR;
 }
@@ -1434,10 +1435,10 @@ struct vkd3d_shader_location
 
 /* This structure is used by vsir_cse_expr_key_compare(); changes to the
  * structure should be reflected by that function as well. */
-struct vkd3d_shader_instruction
+struct vsir_instruction
 {
     struct vkd3d_shader_location location;
-    enum vkd3d_shader_opcode opcode;
+    enum vsir_opcode opcode;
     uint32_t flags;
     size_t dst_count;
     size_t src_count;
@@ -1486,17 +1487,17 @@ static inline bool vkd3d_shader_ver_le(const struct vkd3d_shader_version *v, uns
     return v->major < major || (v->major == major && v->minor <= minor);
 }
 
-void vsir_instruction_init(struct vkd3d_shader_instruction *ins,
-        const struct vkd3d_shader_location *location, enum vkd3d_shader_opcode opcode);
+void vsir_instruction_init(struct vsir_instruction *ins,
+        const struct vkd3d_shader_location *location, enum vsir_opcode opcode);
 
-static inline void vkd3d_shader_instruction_make_nop(struct vkd3d_shader_instruction *ins)
+static inline void vsir_instruction_make_nop(struct vsir_instruction *ins)
 {
     struct vkd3d_shader_location location = ins->location;
 
     vsir_instruction_init(ins, &location, VSIR_OP_NOP);
 }
 
-static inline bool vkd3d_shader_instruction_has_texel_offset(const struct vkd3d_shader_instruction *ins)
+static inline bool vsir_instruction_has_texel_offset(const struct vsir_instruction *ins)
 {
     return ins->texel_offset.u || ins->texel_offset.v || ins->texel_offset.w;
 }
@@ -1520,14 +1521,14 @@ void *shader_param_allocator_get(struct vkd3d_shader_param_allocator *allocator,
 
 struct vkd3d_shader_instruction_array
 {
-    struct vkd3d_shader_instruction *elements;
+    struct vsir_instruction *elements;
     size_t capacity;
     size_t count;
 };
 
 bool shader_instruction_array_init(struct vkd3d_shader_instruction_array *array, size_t reserve);
 void shader_instruction_array_cleanup(struct vkd3d_shader_instruction_array *array);
-struct vkd3d_shader_instruction *shader_instruction_array_append(struct vkd3d_shader_instruction_array *array);
+struct vsir_instruction *shader_instruction_array_append(struct vkd3d_shader_instruction_array *array);
 bool shader_instruction_array_insert_at(struct vkd3d_shader_instruction_array *instructions, size_t idx, size_t count);
 
 struct vsir_program_iterator
@@ -1541,8 +1542,7 @@ static inline struct vsir_program_iterator vsir_program_iterator(struct vkd3d_sh
     return (struct vsir_program_iterator){ .array = array };
 }
 
-static inline struct vkd3d_shader_instruction *vsir_program_iterator_current(
-        struct vsir_program_iterator *iterator)
+static inline struct vsir_instruction *vsir_program_iterator_current(struct vsir_program_iterator *iterator)
 {
     if (iterator->idx >= iterator->array->count)
         return NULL;
@@ -1550,23 +1550,21 @@ static inline struct vkd3d_shader_instruction *vsir_program_iterator_current(
     return &iterator->array->elements[iterator->idx];
 }
 
-static inline struct vkd3d_shader_instruction *vsir_program_iterator_head(
-        struct vsir_program_iterator *iterator)
+static inline struct vsir_instruction *vsir_program_iterator_head(struct vsir_program_iterator *iterator)
 {
     iterator->idx = 0;
 
     return vsir_program_iterator_current(iterator);
 }
 
-static inline struct vkd3d_shader_instruction *vsir_program_iterator_tail(struct vsir_program_iterator *iterator)
+static inline struct vsir_instruction *vsir_program_iterator_tail(struct vsir_program_iterator *iterator)
 {
     iterator->idx = iterator->array->count - 1;
 
     return vsir_program_iterator_current(iterator);
 }
 
-static inline struct vkd3d_shader_instruction *vsir_program_iterator_next(
-        struct vsir_program_iterator *iterator)
+static inline struct vsir_instruction *vsir_program_iterator_next(struct vsir_program_iterator *iterator)
 {
     if (iterator->idx < iterator->array->count || iterator->idx == SIZE_MAX)
         ++iterator->idx;
@@ -1574,8 +1572,7 @@ static inline struct vkd3d_shader_instruction *vsir_program_iterator_next(
     return vsir_program_iterator_current(iterator);
 }
 
-static inline struct vkd3d_shader_instruction *vsir_program_iterator_prev(
-        struct vsir_program_iterator *iterator)
+static inline struct vsir_instruction *vsir_program_iterator_prev(struct vsir_program_iterator *iterator)
 {
     if (iterator->idx != SIZE_MAX)
         --iterator->idx;
@@ -1596,7 +1593,7 @@ static inline bool vsir_program_iterator_insert_after(struct vsir_program_iterat
  * instruction as before the insertion, and argument `ins_it' is initialized
  * to point to the first inserted instruction. A pointer to the first inserted
  * instruction is returned. */
-static inline struct vkd3d_shader_instruction *vsir_program_iterator_insert_before(
+static inline struct vsir_instruction *vsir_program_iterator_insert_before(
         struct vsir_program_iterator *it, struct vsir_program_iterator *ins_it, size_t count)
 {
     VKD3D_ASSERT(it != ins_it);
@@ -1614,7 +1611,7 @@ static inline struct vkd3d_shader_instruction *vsir_program_iterator_insert_befo
 /* When insertion takes place, argument `it' is updated to point to the first
  * inserted instruction. A pointer to this first inserted instruction is
  * returned. */
-static inline struct vkd3d_shader_instruction *vsir_program_iterator_insert_before_and_move(
+static inline struct vsir_instruction *vsir_program_iterator_insert_before_and_move(
         struct vsir_program_iterator *it, size_t count)
 {
     VKD3D_ASSERT(it->idx != SIZE_MAX);
@@ -1697,6 +1694,8 @@ struct vsir_compile_info
     enum vkd3d_shader_denormal_mode denormal_mode_f16;
     enum vkd3d_shader_denormal_mode denormal_mode_f32;
     enum vkd3d_shader_denormal_mode denormal_mode_f64;
+    enum vsir_global_flags global_flags_override_mask;
+    enum vsir_global_flags global_flags_override_value;
 
     uint32_t strip_debug : 1;
     uint32_t ssbo_uavs : 1;
@@ -1717,6 +1716,7 @@ struct vsir_compile_info
     uint32_t denormal_mode_override_f16 : 1;
     uint32_t denormal_mode_override_f32 : 1;
     uint32_t denormal_mode_override_f64 : 1;
+    uint32_t enforce_ieee_754_fp : 1;
 };
 
 void vsir_compile_info_init(struct vsir_compile_info *vsir, const struct vkd3d_shader_compile_info *vkd3d);
@@ -1821,10 +1821,10 @@ enum vkd3d_result vsir_program_validate(struct vsir_program *program, uint64_t c
         const char *source_name, struct vkd3d_shader_message_context *message_context);
 struct vsir_src_operand *vsir_program_create_outpointid_param(struct vsir_program *program);
 bool vsir_instruction_init_with_params(struct vsir_program *program,
-        struct vkd3d_shader_instruction *ins, const struct vkd3d_shader_location *location,
-        enum vkd3d_shader_opcode opcode, unsigned int dst_count, unsigned int src_count);
+        struct vsir_instruction *ins, const struct vkd3d_shader_location *location,
+        enum vsir_opcode opcode, unsigned int dst_count, unsigned int src_count);
 
-static inline struct vkd3d_shader_instruction *vsir_program_append(struct vsir_program *program)
+static inline struct vsir_instruction *vsir_program_append(struct vsir_program *program)
 {
     return shader_instruction_array_append(&program->instructions);
 }
@@ -1871,18 +1871,6 @@ void vsir_program_trace(struct vsir_program *program);
 
 const char *shader_get_type_prefix(enum vkd3d_shader_type type);
 
-struct vkd3d_string_buffer
-{
-    char *buffer;
-    size_t buffer_size, content_size;
-};
-
-struct vkd3d_string_buffer_cache
-{
-    struct vkd3d_string_buffer **buffers;
-    size_t count, max_count, capacity;
-};
-
 enum vsir_asm_flags
 {
     VSIR_ASM_FLAG_NONE = 0,
@@ -1896,23 +1884,6 @@ enum vsir_asm_flags
 enum vkd3d_result d3d_asm_compile(struct vsir_program *program,
         const struct vsir_compile_info *compile_info, struct vkd3d_shader_code *out,
         enum vsir_asm_flags flags, struct vkd3d_shader_message_context *message_context);
-void vkd3d_string_buffer_cleanup(struct vkd3d_string_buffer *buffer);
-struct vkd3d_string_buffer *vkd3d_string_buffer_get(struct vkd3d_string_buffer_cache *list);
-void vkd3d_string_buffer_init(struct vkd3d_string_buffer *buffer);
-void vkd3d_string_buffer_cache_cleanup(struct vkd3d_string_buffer_cache *list);
-void vkd3d_string_buffer_cache_init(struct vkd3d_string_buffer_cache *list);
-void vkd3d_string_buffer_clear(struct vkd3d_string_buffer *buffer);
-void vkd3d_string_buffer_truncate(struct vkd3d_string_buffer *buffer, size_t size);
-int vkd3d_string_buffer_print_f16(struct vkd3d_string_buffer *buffer, uint16_t f);
-int vkd3d_string_buffer_print_f32(struct vkd3d_string_buffer *buffer, float f);
-int vkd3d_string_buffer_print_f64(struct vkd3d_string_buffer *buffer, double d);
-int vkd3d_string_buffer_print_string_escaped(struct vkd3d_string_buffer *buffer, const char *s, size_t len);
-int vkd3d_string_buffer_printf(struct vkd3d_string_buffer *buffer, const char *format, ...) VKD3D_PRINTF_FUNC(2, 3);
-void vkd3d_string_buffer_release(struct vkd3d_string_buffer_cache *list, struct vkd3d_string_buffer *buffer);
-#define vkd3d_string_buffer_trace(buffer) \
-        vkd3d_string_buffer_trace_(buffer, __FUNCTION__)
-void vkd3d_string_buffer_trace_(const struct vkd3d_string_buffer *buffer, const char *function);
-int vkd3d_string_buffer_vprintf(struct vkd3d_string_buffer *buffer, const char *format, va_list args);
 void vkd3d_shader_code_from_string_buffer(struct vkd3d_shader_code *code, struct vkd3d_string_buffer *buffer);
 
 struct vkd3d_bytecode_buffer

@@ -460,7 +460,7 @@ static void glsl_dst_cleanup(struct glsl_dst *dst, struct vkd3d_string_buffer_ca
 }
 
 static uint32_t glsl_dst_init(struct glsl_dst *glsl_dst, struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins, const struct vsir_dst_operand *vsir_dst)
+        const struct vsir_instruction *ins, const struct vsir_dst_operand *vsir_dst)
 {
     uint32_t write_mask = vsir_dst->write_mask;
 
@@ -616,7 +616,7 @@ static void VKD3D_PRINTF_FUNC(4, 5) shader_glsl_print_assignment_ext(struct vkd3
     va_end(args);
 }
 
-static void shader_glsl_unhandled(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_unhandled(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     const char *name = vsir_opcode_get_name(ins->opcode, "<unknown>");
 
@@ -627,7 +627,7 @@ static void shader_glsl_unhandled(struct vkd3d_glsl_generator *gen, const struct
 }
 
 static void shader_glsl_atomic(struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins, const char *tgsm_op, const char *image_op)
+        const struct vsir_instruction *ins, const char *tgsm_op, const char *image_op)
 {
     unsigned int descriptor_id, resource_idx, resource_space, stride;
     bool is_imm = vsir_opcode_is_imm_atomic(ins->opcode);
@@ -734,8 +734,7 @@ static void shader_glsl_atomic(struct vkd3d_glsl_generator *gen,
         vkd3d_string_buffer_release(&gen->string_buffers, buffer);
 }
 
-static void shader_glsl_binop(struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins, const char *op)
+static void shader_glsl_binop(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins, const char *op)
 {
     struct glsl_src src[2];
     struct glsl_dst dst;
@@ -752,8 +751,7 @@ static void shader_glsl_binop(struct vkd3d_glsl_generator *gen,
     glsl_dst_cleanup(&dst, &gen->string_buffers);
 }
 
-static void shader_glsl_dot(struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins, uint32_t src_mask)
+static void shader_glsl_dot(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins, uint32_t src_mask)
 {
     unsigned int component_count;
     struct glsl_src src[2];
@@ -776,7 +774,7 @@ static void shader_glsl_dot(struct vkd3d_glsl_generator *gen,
     glsl_dst_cleanup(&dst, &gen->string_buffers);
 }
 
-static void shader_glsl_saturate(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_saturate(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     struct glsl_src src;
     struct glsl_dst dst;
@@ -792,7 +790,7 @@ static void shader_glsl_saturate(struct vkd3d_glsl_generator *gen, const struct 
 }
 
 static void shader_glsl_intrinsic(struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins, const char *op)
+        const struct vsir_instruction *ins, const char *op)
 {
     struct vkd3d_string_buffer *args;
     struct glsl_src src;
@@ -816,7 +814,7 @@ static void shader_glsl_intrinsic(struct vkd3d_glsl_generator *gen,
 }
 
 static void shader_glsl_relop(struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins, const char *scalar_op, const char *vector_op)
+        const struct vsir_instruction *ins, const char *scalar_op, const char *vector_op)
 {
     unsigned int mask_size;
     struct glsl_src src[2];
@@ -839,7 +837,7 @@ static void shader_glsl_relop(struct vkd3d_glsl_generator *gen,
     glsl_dst_cleanup(&dst, &gen->string_buffers);
 }
 
-static void shader_glsl_cast(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins,
+static void shader_glsl_cast(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins,
         const char *scalar_constructor, const char *vector_constructor)
 {
     unsigned int component_count;
@@ -875,7 +873,7 @@ static void shader_glsl_begin_block(struct vkd3d_glsl_generator *gen)
     ++gen->indent;
 }
 
-static void shader_glsl_if(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_if(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     const char *condition;
     struct glsl_src src;
@@ -891,7 +889,7 @@ static void shader_glsl_if(struct vkd3d_glsl_generator *gen, const struct vkd3d_
     shader_glsl_begin_block(gen);
 }
 
-static void shader_glsl_else(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_else(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     shader_glsl_end_block(gen);
     shader_glsl_print_indent(gen->buffer, gen->indent);
@@ -918,7 +916,7 @@ static void shader_glsl_continue(struct vkd3d_glsl_generator *gen)
     vkd3d_string_buffer_printf(gen->buffer, "continue;\n");
 }
 
-static void shader_glsl_switch(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_switch(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     struct glsl_src src;
 
@@ -931,7 +929,7 @@ static void shader_glsl_switch(struct vkd3d_glsl_generator *gen, const struct vk
     glsl_src_cleanup(&src, &gen->string_buffers);
 }
 
-static void shader_glsl_case(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_case(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     struct glsl_src src;
 
@@ -970,7 +968,7 @@ static void shader_glsl_print_texel_offset(struct vkd3d_string_buffer *buffer, s
     }
 }
 
-static void shader_glsl_ld(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_ld(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     unsigned int coord_size, resource_id, resource_idx, resource_space, sample_count;
     const struct glsl_resource_type_info *resource_type_info;
@@ -982,7 +980,7 @@ static void shader_glsl_ld(struct vkd3d_glsl_generator *gen, const struct vkd3d_
     struct glsl_dst dst;
     bool array, offset;
 
-    offset = vkd3d_shader_instruction_has_texel_offset(ins);
+    offset = vsir_instruction_has_texel_offset(ins);
 
     if (ins->src[1].reg.idx[0].rel_addr || ins->src[1].reg.idx[1].rel_addr)
         vkd3d_glsl_compiler_error(gen, VKD3D_SHADER_ERROR_GLSL_UNSUPPORTED,
@@ -1087,7 +1085,7 @@ static void shader_glsl_print_shadow_coord(struct vkd3d_string_buffer *buffer, s
     }
 }
 
-static void shader_glsl_sample(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_sample(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     bool shadow_sampler, array, bias, dynamic_offset, gather, grad, lod, lod_zero, offset, shadow;
     const struct glsl_resource_type_info *resource_type_info;
@@ -1107,7 +1105,7 @@ static void shader_glsl_sample(struct vkd3d_glsl_generator *gen, const struct vk
     grad = ins->opcode == VSIR_OP_SAMPLE_GRAD;
     lod = ins->opcode == VSIR_OP_SAMPLE_LOD || ins->opcode == VSIR_OP_SAMPLE_C_LZ;
     lod_zero = ins->opcode == VSIR_OP_SAMPLE_C_LZ;
-    offset = dynamic_offset || vkd3d_shader_instruction_has_texel_offset(ins);
+    offset = dynamic_offset || vsir_instruction_has_texel_offset(ins);
     shadow = ins->opcode == VSIR_OP_SAMPLE_C || ins->opcode == VSIR_OP_SAMPLE_C_LZ;
 
     resource = &ins->src[1 + dynamic_offset];
@@ -1242,8 +1240,7 @@ static void shader_glsl_sample(struct vkd3d_glsl_generator *gen, const struct vk
     glsl_dst_cleanup(&dst, &gen->string_buffers);
 }
 
-static void shader_glsl_load_raw_structured(struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_load_raw_structured(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     const struct vsir_src_operand *resource_src = &ins->src[ins->src_count - 1];
     unsigned int count, descriptor_id, resource_idx, resource_space, i, stride;
@@ -1347,7 +1344,7 @@ static void shader_glsl_load_raw_structured(struct vkd3d_glsl_generator *gen,
     glsl_dst_cleanup(&dst, &gen->string_buffers);
 }
 
-static void shader_glsl_load_uav_typed(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_load_uav_typed(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     const struct glsl_resource_type_info *resource_type_info;
     enum vkd3d_shader_resource_type resource_type;
@@ -1407,8 +1404,7 @@ static void shader_glsl_load_uav_typed(struct vkd3d_glsl_generator *gen, const s
     glsl_dst_cleanup(&dst, &gen->string_buffers);
 }
 
-static void shader_glsl_store_raw_structured(struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_store_raw_structured(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     unsigned int descriptor_id, resource_idx, resource_space, i, stride, src_idx;
     struct vkd3d_string_buffer *buffer = gen->buffer;
@@ -1510,7 +1506,7 @@ static void shader_glsl_store_raw_structured(struct vkd3d_glsl_generator *gen,
     vkd3d_string_buffer_release(&gen->string_buffers, coord);
 }
 
-static void shader_glsl_store_uav_typed(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_store_uav_typed(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     const struct glsl_resource_type_info *resource_type_info;
     enum vkd3d_shader_resource_type resource_type;
@@ -1568,7 +1564,7 @@ static void shader_glsl_store_uav_typed(struct vkd3d_glsl_generator *gen, const 
 }
 
 static void shader_glsl_unary_op(struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins, const char *op)
+        const struct vsir_instruction *ins, const char *op)
 {
     struct glsl_src src;
     struct glsl_dst dst;
@@ -1583,7 +1579,7 @@ static void shader_glsl_unary_op(struct vkd3d_glsl_generator *gen,
     glsl_dst_cleanup(&dst, &gen->string_buffers);
 }
 
-static void shader_glsl_mov(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_mov(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     struct glsl_src src;
     struct glsl_dst dst;
@@ -1598,7 +1594,7 @@ static void shader_glsl_mov(struct vkd3d_glsl_generator *gen, const struct vkd3d
     glsl_dst_cleanup(&dst, &gen->string_buffers);
 }
 
-static void shader_glsl_movc(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_movc(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     struct vkd3d_string_buffer *src1, *src2;
     unsigned int component_count;
@@ -1831,15 +1827,14 @@ static void shader_glsl_shader_epilogue(struct vkd3d_glsl_generator *gen)
     }
 }
 
-static void shader_glsl_ret(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_ret(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     shader_glsl_shader_epilogue(gen);
     shader_glsl_print_indent(gen->buffer, gen->indent);
     vkd3d_string_buffer_printf(gen->buffer, "return;\n");
 }
 
-static void shader_glsl_dcl_indexable_temp(struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_dcl_indexable_temp(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     shader_glsl_print_indent(gen->buffer, gen->indent);
     vkd3d_string_buffer_printf(gen->buffer, "vec4 x%u[%u];\n",
@@ -1847,7 +1842,7 @@ static void shader_glsl_dcl_indexable_temp(struct vkd3d_glsl_generator *gen,
             ins->declaration.indexable_temp.register_size);
 }
 
-static void shader_glsl_barrier(struct vkd3d_glsl_generator *gen, const struct vkd3d_shader_instruction *ins)
+static void shader_glsl_barrier(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     uint32_t flags = ins->flags;
 
@@ -1884,8 +1879,7 @@ static void shader_glsl_barrier(struct vkd3d_glsl_generator *gen, const struct v
                 "Internal compiler error: Unhandled synchronisation flags %#x.", flags);
 }
 
-static void vkd3d_glsl_handle_instruction(struct vkd3d_glsl_generator *gen,
-        const struct vkd3d_shader_instruction *ins)
+static void vkd3d_glsl_handle_instruction(struct vkd3d_glsl_generator *gen, const struct vsir_instruction *ins)
 {
     gen->location = ins->location;
 
@@ -2842,8 +2836,8 @@ static void shader_glsl_generate_declarations(struct vkd3d_glsl_generator *gen)
 static int vkd3d_glsl_generator_generate(struct vkd3d_glsl_generator *gen, struct vkd3d_shader_code *out)
 {
     struct vkd3d_string_buffer *buffer = gen->buffer;
-    struct vkd3d_shader_instruction *ins;
     struct vsir_program_iterator it;
+    struct vsir_instruction *ins;
 
     MESSAGE("Generating a GLSL shader. This is unsupported; you get to keep all the pieces if it breaks.\n");
 
