@@ -308,7 +308,7 @@ struct vkd3d_sm1_opcode_info
     enum vkd3d_sm1_opcode sm1_opcode;
     unsigned int dst_count;
     unsigned int src_count;
-    enum vkd3d_shader_opcode vkd3d_opcode;
+    enum vsir_opcode vsir_opcode;
     struct
     {
         unsigned int major, minor;
@@ -556,7 +556,7 @@ static const struct vkd3d_sm1_opcode_info *shader_sm1_get_opcode_info(
     for (;;)
     {
         info = &sm1->opcode_table[i++];
-        if (info->vkd3d_opcode == VSIR_OP_INVALID)
+        if (info->vsir_opcode == VSIR_OP_INVALID)
             return NULL;
 
         if (opcode == info->sm1_opcode
@@ -986,7 +986,7 @@ static void record_constant_register(struct vkd3d_shader_sm1_parser *sm1,
     }
 }
 
-static unsigned int d3dbc_get_src_register_count(enum vkd3d_shader_opcode opcode, unsigned int src_idx)
+static unsigned int d3dbc_get_src_register_count(enum vsir_opcode opcode, unsigned int src_idx)
 {
     switch (opcode)
     {
@@ -1131,16 +1131,12 @@ static void shader_sm1_skip_opcode(const struct vkd3d_shader_sm1_parser *sm1, co
     }
 
     /* DCL instructions read an extra token for the semantic. */
-    if (opcode_info->vkd3d_opcode == VSIR_OP_DCL)
-    {
+    if (opcode_info->vsir_opcode == VSIR_OP_DCL)
         *ptr += 1;
-    }
     /* We don't count DEF instructions as having a source, but they do have
      * four tokens of float constants. */
-    else if (opcode_info->vkd3d_opcode == VSIR_OP_DEF)
-    {
+    else if (opcode_info->vsir_opcode == VSIR_OP_DEF)
         *ptr += 4;
-    }
 
     *ptr += (opcode_info->dst_count + opcode_info->src_count);
 }
@@ -1280,8 +1276,7 @@ static void shader_sm1_read_comment(struct vkd3d_shader_sm1_parser *sm1)
     }
 }
 
-static void d3dbc_update_descriptors(struct vkd3d_shader_sm1_parser *d3dbc,
-        const struct vkd3d_shader_instruction *ins)
+static void d3dbc_update_descriptors(struct vkd3d_shader_sm1_parser *d3dbc, const struct vsir_instruction *ins)
 {
     enum vkd3d_shader_resource_type type = VKD3D_SHADER_RESOURCE_TEXTURE_2D;
     const struct vkd3d_shader_d3dbc_source_info *source_info;
@@ -1317,7 +1312,7 @@ static void d3dbc_update_descriptors(struct vkd3d_shader_sm1_parser *d3dbc,
     }
 }
 
-static void shader_sm1_validate_instruction(struct vkd3d_shader_sm1_parser *sm1, struct vkd3d_shader_instruction *ins)
+static void shader_sm1_validate_instruction(struct vkd3d_shader_sm1_parser *sm1, struct vsir_instruction *ins)
 {
     if ((ins->opcode == VSIR_OP_BREAKP || ins->opcode == VSIR_OP_IF) && ins->flags)
     {
@@ -1523,7 +1518,7 @@ static void vsir_dst_operand_from_d3dbc(struct vkd3d_shader_sm1_parser *parser, 
 
 static enum vkd3d_result shader_sm1_read_instruction(struct vkd3d_shader_sm1_parser *parser,
         const struct d3dbc_instruction *d3dbc_ins,
-        const struct vkd3d_sm1_opcode_info *opcode_info, struct vkd3d_shader_instruction *ins)
+        const struct vkd3d_sm1_opcode_info *opcode_info, struct vsir_instruction *ins)
 {
     struct vsir_program *program = parser->program;
     struct vkd3d_shader_semantic *semantic;
@@ -1573,7 +1568,7 @@ static enum vkd3d_result shader_sm1_read_instruction(struct vkd3d_shader_sm1_par
         case VKD3D_SM1_OP_DEFB:
         case VKD3D_SM1_OP_DEFI:
             if (!vsir_instruction_init_with_params(program, ins,
-                    &parser->p.location, opcode_info->vkd3d_opcode, 1, 1))
+                    &parser->p.location, opcode_info->vsir_opcode, 1, 1))
                 return VKD3D_ERROR_OUT_OF_MEMORY;
             vsir_dst_operand_from_d3dbc(parser, &ins->dst[0], &d3dbc_ins->dst[0], &d3dbc_ins->dst_rel_addr[0]);
 
@@ -1606,7 +1601,7 @@ static enum vkd3d_result shader_sm1_read_instruction(struct vkd3d_shader_sm1_par
          * operate generically on sources or destinations, normalise that. */
         case VKD3D_SM1_OP_TEXKILL:
             if (!vsir_instruction_init_with_params(program, ins, &parser->p.location,
-                    opcode_info->vkd3d_opcode, 0, 1))
+                    opcode_info->vsir_opcode, 0, 1))
                 return VKD3D_ERROR_OUT_OF_MEMORY;
 
             vsir_operand_from_d3dbc(parser, &ins->src[0].reg, &d3dbc_ins->dst[0].o, &d3dbc_ins->dst_rel_addr[0]);
@@ -1616,7 +1611,7 @@ static enum vkd3d_result shader_sm1_read_instruction(struct vkd3d_shader_sm1_par
 
         default:
             if (!vsir_instruction_init_with_params(program, ins, &parser->p.location,
-                    opcode_info->vkd3d_opcode, d3dbc_ins->dst_count, d3dbc_ins->src_count))
+                    opcode_info->vsir_opcode, d3dbc_ins->dst_count, d3dbc_ins->src_count))
                 return VKD3D_ERROR_OUT_OF_MEMORY;
 
             if (d3dbc_ins->dst_count)
@@ -1741,6 +1736,8 @@ static enum vkd3d_result shader_sm1_init(struct vkd3d_shader_sm1_parser *sm1, st
             code_size != ~(size_t)0 ? token_count / 4u + 4 : 16, VSIR_CF_STRUCTURED, normalisation_level))
         return VKD3D_ERROR_OUT_OF_MEMORY;
 
+    /* D3dbc shaders do not (strictly) adhere to IEEE 754. */
+    program->global_flags |= VKD3DSGF_REFACTORING_ALLOWED;
     program->f32_denormal_mode = VKD3D_SHADER_DENORMAL_MODE_FLUSH_TO_ZERO;
 
     vkd3d_shader_parser_init(&sm1->p, message_context, compile_info->source_name);
@@ -1771,7 +1768,7 @@ int d3dbc_parse(const struct vkd3d_shader_compile_info *compile_info, uint64_t c
         struct vkd3d_shader_message_context *message_context, struct vsir_program *program)
 {
     struct vkd3d_shader_sm1_parser sm1 = {0};
-    struct vkd3d_shader_instruction *ins;
+    struct vsir_instruction *ins;
     struct vsir_descriptor *d;
     unsigned int i;
     int ret;
@@ -1982,7 +1979,7 @@ static uint32_t sm1_version(enum vkd3d_shader_type type, unsigned int major, uns
 }
 
 static const struct vkd3d_sm1_opcode_info *shader_sm1_get_opcode_info_from_vsir(
-        struct d3dbc_compiler *compiler, enum vkd3d_shader_opcode vkd3d_opcode)
+        struct d3dbc_compiler *compiler, enum vsir_opcode vsir_opcode)
 {
     const struct vkd3d_shader_version *version = &compiler->program->shader_version;
     const struct vkd3d_sm1_opcode_info *info;
@@ -1991,10 +1988,10 @@ static const struct vkd3d_sm1_opcode_info *shader_sm1_get_opcode_info_from_vsir(
     for (;;)
     {
         info = &compiler->opcode_table[i++];
-        if (info->vkd3d_opcode == VSIR_OP_INVALID)
+        if (info->vsir_opcode == VSIR_OP_INVALID)
             return NULL;
 
-        if (vkd3d_opcode == info->vkd3d_opcode
+        if (vsir_opcode == info->vsir_opcode
                 && vkd3d_shader_ver_ge(version, info->min_version.major, info->min_version.minor)
                 && (vkd3d_shader_ver_le(version, info->max_version.major, info->max_version.minor)
                         || !info->max_version.major))
@@ -2003,7 +2000,7 @@ static const struct vkd3d_sm1_opcode_info *shader_sm1_get_opcode_info_from_vsir(
 }
 
 static const struct vkd3d_sm1_opcode_info *shader_sm1_get_opcode_info_from_vsir_instruction(
-        struct d3dbc_compiler *compiler, const struct vkd3d_shader_instruction *ins)
+        struct d3dbc_compiler *compiler, const struct vsir_instruction *ins)
 {
     const struct vkd3d_sm1_opcode_info *info;
 
@@ -2096,7 +2093,7 @@ static uint32_t swizzle_from_vsir(uint32_t swizzle)
             | ((w & 0x3) << VKD3D_SM1_SWIZZLE_COMPONENT_SHIFT(3));
 }
 
-static bool is_inconsequential_instr(const struct vkd3d_shader_instruction *ins)
+static bool is_inconsequential_instr(const struct vsir_instruction *ins)
 {
     const struct vsir_src_operand *src = &ins->src[0];
     const struct vsir_dst_operand *dst = &ins->dst[0];
@@ -2174,7 +2171,7 @@ static void validate_register_limits(struct d3dbc_compiler *compiler,
     }
 }
 
-static void d3dbc_write_instruction(struct d3dbc_compiler *compiler, const struct vkd3d_shader_instruction *ins)
+static void d3dbc_write_instruction(struct d3dbc_compiler *compiler, const struct vsir_instruction *ins)
 {
     const struct vkd3d_shader_version *version = &compiler->program->shader_version;
     struct vkd3d_bytecode_buffer *buffer = &compiler->buffer;
@@ -2227,10 +2224,10 @@ static void d3dbc_write_instruction(struct d3dbc_compiler *compiler, const struc
     set_u32(buffer, token_position, token);
 };
 
-static void d3dbc_write_texkill(struct d3dbc_compiler *compiler, const struct vkd3d_shader_instruction *ins)
+static void d3dbc_write_texkill(struct d3dbc_compiler *compiler, const struct vsir_instruction *ins)
 {
     const struct vsir_operand *reg = &ins->src[0].reg;
-    struct vkd3d_shader_instruction tmp;
+    struct vsir_instruction tmp;
     struct vsir_dst_operand dst;
 
     /* TEXKILL, uniquely, encodes its argument as a destination, when it is
@@ -2248,7 +2245,7 @@ static void d3dbc_write_texkill(struct d3dbc_compiler *compiler, const struct vk
     d3dbc_write_instruction(compiler, &tmp);
 }
 
-static void d3dbc_write_vsir_def(struct d3dbc_compiler *compiler, const struct vkd3d_shader_instruction *ins)
+static void d3dbc_write_vsir_def(struct d3dbc_compiler *compiler, const struct vsir_instruction *ins)
 {
     const struct vkd3d_shader_version *version = &compiler->program->shader_version;
     struct vkd3d_bytecode_buffer *buffer = &compiler->buffer;
@@ -2272,7 +2269,7 @@ static void d3dbc_write_vsir_def(struct d3dbc_compiler *compiler, const struct v
         put_f32(buffer, ins->src[0].reg.u.immconst_f32[x]);
 }
 
-static void d3dbc_write_vsir_defi(struct d3dbc_compiler *compiler, const struct vkd3d_shader_instruction *ins)
+static void d3dbc_write_vsir_defi(struct d3dbc_compiler *compiler, const struct vsir_instruction *ins)
 {
     const struct vkd3d_shader_version *version = &compiler->program->shader_version;
     struct vkd3d_bytecode_buffer *buffer = &compiler->buffer;
@@ -2321,7 +2318,7 @@ static void d3dbc_write_vsir_sampler_dcl(struct d3dbc_compiler *compiler,
     write_sm1_dst_register(buffer, &reg);
 }
 
-static void d3dbc_write_vsir_dcl(struct d3dbc_compiler *compiler, const struct vkd3d_shader_instruction *ins)
+static void d3dbc_write_vsir_dcl(struct d3dbc_compiler *compiler, const struct vsir_instruction *ins)
 {
     const struct vkd3d_shader_version *version = &compiler->program->shader_version;
     const struct vkd3d_shader_semantic *semantic = &ins->declaration.semantic;
@@ -2362,7 +2359,7 @@ static void d3dbc_write_vsir_dcl(struct d3dbc_compiler *compiler, const struct v
     }
 }
 
-static void d3dbc_write_vsir_instruction(struct d3dbc_compiler *compiler, const struct vkd3d_shader_instruction *ins)
+static void d3dbc_write_vsir_instruction(struct d3dbc_compiler *compiler, const struct vsir_instruction *ins)
 {
     uint32_t writemask;
 
@@ -2521,7 +2518,7 @@ static void d3dbc_write_semantic_dcls(struct d3dbc_compiler *compiler)
 static void d3dbc_write_program_instructions(struct d3dbc_compiler *compiler)
 {
     struct vsir_program_iterator it = vsir_program_iterator(&compiler->program->instructions);
-    struct vkd3d_shader_instruction *ins;
+    struct vsir_instruction *ins;
 
     for (ins = vsir_program_iterator_head(&it); ins; ins = vsir_program_iterator_next(&it))
     {

@@ -4594,7 +4594,7 @@ static NTSTATUS grow_thread_stack( struct thread_data *data, char *page, struct 
     mprotect_range( page, host_page_size, 0, 0 );
     if (page >= stack_info->start + host_page_size + stack_info->guaranteed)
     {
-        set_page_vprot_bits( page - host_page_size, host_page_size, VPROT_COMMITTED | VPROT_GUARD, 0 );
+        set_page_vprot_bits( page - host_page_size, host_page_size, VPROT_COMMITTED | VPROT_READ | VPROT_WRITE | VPROT_GUARD, 0 );
         mprotect_range( page - host_page_size, host_page_size, 0, 0 );
     }
     else  /* inside guaranteed space -> overflow exception */

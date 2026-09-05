@@ -49,7 +49,7 @@ struct vkd3d_d3d_asm_compiler
     struct vkd3d_shader_version shader_version;
     struct vkd3d_d3d_asm_colours colours;
     enum vsir_asm_flags flags;
-    const struct vkd3d_shader_instruction *current;
+    const struct vsir_instruction *current;
 };
 
 static void shader_dump_global_flags(struct vkd3d_d3d_asm_compiler *compiler, enum vsir_global_flags global_flags)
@@ -1368,8 +1368,7 @@ const char *shader_get_type_prefix(enum vkd3d_shader_type type)
     }
 }
 
-static void shader_dump_instruction_flags(struct vkd3d_d3d_asm_compiler *compiler,
-        const struct vkd3d_shader_instruction *ins)
+static void shader_dump_instruction_flags(struct vkd3d_d3d_asm_compiler *compiler, const struct vsir_instruction *ins)
 {
     struct vkd3d_string_buffer *buffer = &compiler->buffer;
 
@@ -1509,7 +1508,7 @@ static void shader_dump_register_space(struct vkd3d_d3d_asm_compiler *compiler, 
         shader_print_uint_literal(compiler, ", space=", register_space, "");
 }
 
-static void shader_print_opcode(struct vkd3d_d3d_asm_compiler *compiler, enum vkd3d_shader_opcode opcode)
+static void shader_print_opcode(struct vkd3d_d3d_asm_compiler *compiler, enum vsir_opcode opcode)
 {
     vkd3d_string_buffer_printf(&compiler->buffer, "%s%s%s", compiler->colours.opcode,
             vsir_opcode_get_name(opcode, "<unknown>"), compiler->colours.reset);
@@ -1545,8 +1544,7 @@ static void shader_dump_icb(struct vkd3d_d3d_asm_compiler *compiler,
     vkd3d_string_buffer_printf(buffer, "}");
 }
 
-static void shader_dump_instruction(struct vkd3d_d3d_asm_compiler *compiler,
-        const struct vkd3d_shader_instruction *ins)
+static void shader_dump_instruction(struct vkd3d_d3d_asm_compiler *compiler, const struct vsir_instruction *ins)
 {
     struct vkd3d_string_buffer *buffer = &compiler->buffer;
     unsigned int i;
@@ -1774,7 +1772,7 @@ static void shader_dump_instruction(struct vkd3d_d3d_asm_compiler *compiler,
                 vkd3d_string_buffer_printf(buffer, ")");
             }
 
-            if (vkd3d_shader_instruction_has_texel_offset(ins))
+            if (vsir_instruction_has_texel_offset(ins))
             {
                 shader_print_int_literal(compiler, "(", ins->texel_offset.u, "");
                 shader_print_int_literal(compiler, ",", ins->texel_offset.v, "");
@@ -2076,10 +2074,10 @@ enum vkd3d_result d3d_asm_compile(struct vsir_program *program, const struct vsi
     {
         .flags = flags,
     };
-    struct vkd3d_shader_instruction *ins;
     enum vkd3d_result result = VKD3D_OK;
     struct vkd3d_string_buffer *buffer;
     struct vsir_program_iterator it;
+    struct vsir_instruction *ins;
     unsigned int indent, i;
     const char *indent_str;
 
