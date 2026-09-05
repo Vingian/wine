@@ -47,10 +47,7 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	sed -i '/Wine update and checkout/,/rm -rf.*git clone/s/^\(\s*\)/\1#/' non-makepkg-build.sh
 	sed -i 's/_plain_version=""/_plain_version="wine-'"${WINE_VERSION_TAG}"'"/' customization.cfg
 	sed -i 's/_staging_version=""/_staging_version="v'"${STAGING_VERSION_TAG}"'"/' customization.cfg
- 	sed -i '/_use_fastsync=/s/true/false/' customization.cfg
- 	sed -i '/_use_ntsync=/s/true/false/' customization.cfg
-  	sed -i '/_use_esync=/s/true/false/' customization.cfg
-   	sed -i '/_use_fsync=/s/true/false/' customization.cfg
+	sed -i 's/_LOCAL_PRESET=""/_LOCAL_PRESET="none"/' customization.cfg
 	sed -i '/_proton_fs_hack=/s/false/true/' customization.cfg
 	sed -i '/_win10_default=/s/false/true/' customization.cfg
 	sed -i '/_use_josh_flat_theme=/s/true/false/' customization.cfg
@@ -60,29 +57,12 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	mkdir src
 	popd
 
-	if grep -q '+#include "wine/heap.h"' wine-tkg-git/wine-tkg-git/wine-tkg-patches/misc/winewayland/ge-wayland.patch; then
-		sed -i 's|+#include "wine/heap.h"|+//#include "wine/heap.h"|g' wine-tkg-git/wine-tkg-git/wine-tkg-patches/misc/winewayland/ge-wayland.patch
-	fi
-	if grep -q '0x0107, NtWow64WriteVirtualMemory64' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/Revert-ntdll-Get-rid-of-the-wine_nt_to_unix_file_nam.patch; then
-		cp -f Revert-ntdll-Get-rid-of-the-wine_nt_to_unix_file_nam.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/
-	fi
-	if grep -q 'Strip path information if the module resides in the system directory' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/proton-eac_bridge.patch; then
-		cp -f proton-eac_bridge.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton-tkg-specific/proton_eac/
-	fi
-	if grep -q 'ac_cv_header_CL_cl_h' wine-tkg-git/wine-tkg-git/wine-tkg-patches/hotfixes/autoconf-opencl-hotfix/opencl-fixup.mypatch; then
-		cp -f opencl-fixup.mypatch wine-tkg-git/wine-tkg-git/wine-tkg-patches/hotfixes/autoconf-opencl-hotfix/
-	fi
-	if grep -q 'limit_4g : limit_2g' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/LAA/LAA-unix-wow64.patch; then
-		cp -f LAA-unix-wow64.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/LAA/
-		cp -f LAA-unix-staging-wow64.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/LAA/
-	fi
-
 	if [ -z "$HAVE_WINE_VERSION" ]; then
 		cp -r wine-staging wine-tkg-git/wine-tkg-git/src/wine-staging-git
 		cp -r wine wine-tkg-git/wine-tkg-git/src/wine-git
 		pushd wine-tkg-git/wine-tkg-git
 		sed -i '/_use_staging=/s/true/false/' customization.cfg
-		./non-makepkg-build.sh </dev/null || exit 0
+		./non-makepkg-build.sh || exit 0
   		grep -q ' FAILED ' prepare.log && exit 0
 		popd
 		mv wine-tkg-git/wine-tkg-git/src/wine-git tkg-wine
@@ -93,7 +73,7 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
 	cp -r wine wine-tkg-git/wine-tkg-git/src/wine-git
 	pushd wine-tkg-git/wine-tkg-git
 	sed -i '/_use_staging=/s/false/true/' customization.cfg
-	./non-makepkg-build.sh </dev/null || exit 0
+	./non-makepkg-build.sh || exit 0
  	grep -q ' FAILED ' prepare.log && exit 0
 	popd
 	mv wine-tkg-git/wine-tkg-git/src/wine-git tkg-staging-wine
