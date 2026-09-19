@@ -2014,6 +2014,13 @@ struct hlsl_ir_node *hlsl_new_ternary_expr(struct hlsl_ctx *ctx, enum hlsl_ir_ex
     return hlsl_new_expr(ctx, op, operands, arg1->data_type, &arg1->loc);
 }
 
+struct hlsl_ir_node *hlsl_block_add_ternary_expr(struct hlsl_ctx *ctx, struct hlsl_block *block,
+        enum hlsl_ir_expr_op op, struct hlsl_ir_node *arg1, struct hlsl_ir_node *arg2,
+        struct hlsl_ir_node *arg3)
+{
+    return append_new_instr(ctx, block, hlsl_new_ternary_expr(ctx, op, arg1, arg2, arg3));
+}
+
 struct hlsl_ir_node *hlsl_new_cast(struct hlsl_ctx *ctx, struct hlsl_ir_node *node, struct hlsl_type *type,
         const struct vkd3d_shader_location *loc)
 {
