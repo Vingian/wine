@@ -397,7 +397,7 @@ HRESULT WINAPI D3DCompile2VKD3D(const void *data, SIZE_T data_size, const char *
 {
     struct vkd3d_shader_preprocess_info preprocess_info;
     struct vkd3d_shader_hlsl_source_info hlsl_info;
-    struct vkd3d_shader_compile_option options[7];
+    struct vkd3d_shader_compile_option options[8];
     struct vkd3d_shader_compile_info compile_info;
     struct vkd3d_shader_compile_option *option;
     struct vkd3d_shader_code byte_code;
@@ -465,6 +465,13 @@ HRESULT WINAPI D3DCompile2VKD3D(const void *data, SIZE_T data_size, const char *
             option->value |= VKD3D_SHADER_COMPILE_OPTION_PACK_MATRIX_ROW_MAJOR;
         else if (flags & D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR)
             option->value |= VKD3D_SHADER_COMPILE_OPTION_PACK_MATRIX_COLUMN_MAJOR;
+    }
+
+    if (!(flags & D3DCOMPILE_IEEE_STRICTNESS))
+    {
+        option = &options[compile_info.option_count++];
+        option->name = VKD3D_SHADER_COMPILE_OPTION_IEEE_754_FP;
+        option->value = false;
     }
 
     option = &options[compile_info.option_count++];
