@@ -3,7 +3,7 @@
 #GH_REPO=''
 #GH_TOKEN=''
 
-STAGING_EXCLUDE='-W ntdll-ForceBottomUpAlloc -W ntdll-Hide_Wine_Exports'
+STAGING_EXCLUDE='-W ntdll-Hide_Wine_Exports'
 
 WINE_VERSION=($(curl -s 'https://gitlab.winehq.org/api/v4/projects/5/releases' | jq -r '.[0].tag_name' 2>/dev/null | grep -o '[0-9.]*'))
 STAGING_VERSION=($(curl -s 'https://gitlab.winehq.org/api/v4/projects/231/repository/tags' | jq -r '.[0].name' 2>/dev/null | grep -o '[0-9.]*'))
@@ -56,6 +56,11 @@ if [ $(echo -e "${WINE_VERSION_TAG}\n${STAGING_VERSION_TAG}" | sort -V | tail -1
  	sed -i '$a\\n_staging_userargs="${_staging_userargs:+$_staging_userargs }'"${STAGING_EXCLUDE}"'"' wine-tkg-profiles/advanced-customization.cfg
 	mkdir src
 	popd
+
+	if grep -q 'virtual_set_large_address_space' wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/LAA/LAA-unix-wow64.patch; then
+		cp -f LAA-unix-wow64.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/LAA/
+		cp -f LAA-unix-staging-wow64.patch wine-tkg-git/wine-tkg-git/wine-tkg-patches/proton/LAA/
+	fi
 
 	if [ -z "$HAVE_WINE_VERSION" ]; then
 		cp -r wine-staging wine-tkg-git/wine-tkg-git/src/wine-staging-git
