@@ -81,6 +81,7 @@
 extern bool allow_vsync;
 extern bool allow_set_gamma;
 extern bool allow_software_rendering;
+extern bool force_backing_store;
 
 extern UINT64 app_icon_callback;
 extern UINT64 app_quit_request_callback;
