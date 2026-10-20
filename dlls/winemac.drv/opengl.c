@@ -1778,7 +1778,7 @@ static struct opengl_context *macdrv_context_create(const struct opengl_context_
         *attrib++ = pf->samples;
     }
 
-    if (pf->backing_store) *attrib++ = kCGLPFABackingStore;
+    if (force_backing_store || pf->backing_store) *attrib++ = kCGLPFABackingStore;
 
     if (attrs->profile & WGL_CONTEXT_CORE_PROFILE_BIT_ARB)
     {

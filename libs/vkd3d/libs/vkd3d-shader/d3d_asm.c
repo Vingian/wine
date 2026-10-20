@@ -49,7 +49,7 @@ struct vkd3d_d3d_asm_compiler
     struct vkd3d_shader_version shader_version;
     struct vkd3d_d3d_asm_colours colours;
     enum vsir_asm_flags flags;
-    const struct vkd3d_shader_instruction *current;
+    const struct vsir_instruction *current;
 };
 
 static void shader_dump_global_flags(struct vkd3d_d3d_asm_compiler *compiler, enum vsir_global_flags global_flags)
@@ -928,7 +928,8 @@ static void shader_print_operand(struct vkd3d_d3d_asm_compiler *compiler, const 
 
             if (reg->idx[0].rel_addr || reg->type == VSIR_REGISTER_IMMCONSTBUFFER
                     || reg->type == VSIR_REGISTER_INCONTROLPOINT || reg->type == VSIR_REGISTER_OUTCONTROLPOINT
-                    || (reg->type == VSIR_REGISTER_INPUT && (compiler->shader_version.type == VKD3D_SHADER_TYPE_GEOMETRY
+                    || reg->type == VSIR_REGISTER_THIS || (reg->type == VSIR_REGISTER_INPUT
+                    && (compiler->shader_version.type == VKD3D_SHADER_TYPE_GEOMETRY
                     || compiler->shader_version.type == VKD3D_SHADER_TYPE_HULL)))
             {
                 vkd3d_string_buffer_printf(buffer, "%s", compiler->colours.reset);
@@ -1204,33 +1205,6 @@ static void shader_dump_ins_modifiers(struct vkd3d_d3d_asm_compiler *compiler,
     struct vkd3d_string_buffer *buffer = &compiler->buffer;
     uint32_t mmask = dst->modifiers;
 
-    switch (dst->shift)
-    {
-        case 0:
-            break;
-        case 13:
-            vkd3d_string_buffer_printf(buffer, "_d8");
-            break;
-        case 14:
-            vkd3d_string_buffer_printf(buffer, "_d4");
-            break;
-        case 15:
-            vkd3d_string_buffer_printf(buffer, "_d2");
-            break;
-        case 1:
-            vkd3d_string_buffer_printf(buffer, "_x2");
-            break;
-        case 2:
-            vkd3d_string_buffer_printf(buffer, "_x4");
-            break;
-        case 3:
-            vkd3d_string_buffer_printf(buffer, "_x8");
-            break;
-        default:
-            vkd3d_string_buffer_printf(buffer, "_unhandled_shift(%d)", dst->shift);
-            break;
-    }
-
     if (mmask & VKD3DSPDM_SATURATE)
         vkd3d_string_buffer_printf(buffer, "_sat");
     if (mmask & VKD3DSPDM_PARTIALPRECISION)
@@ -1368,8 +1342,7 @@ const char *shader_get_type_prefix(enum vkd3d_shader_type type)
     }
 }
 
-static void shader_dump_instruction_flags(struct vkd3d_d3d_asm_compiler *compiler,
-        const struct vkd3d_shader_instruction *ins)
+static void shader_dump_instruction_flags(struct vkd3d_d3d_asm_compiler *compiler, const struct vsir_instruction *ins)
 {
     struct vkd3d_string_buffer *buffer = &compiler->buffer;
 
@@ -1509,7 +1482,7 @@ static void shader_dump_register_space(struct vkd3d_d3d_asm_compiler *compiler, 
         shader_print_uint_literal(compiler, ", space=", register_space, "");
 }
 
-static void shader_print_opcode(struct vkd3d_d3d_asm_compiler *compiler, enum vkd3d_shader_opcode opcode)
+static void shader_print_opcode(struct vkd3d_d3d_asm_compiler *compiler, enum vsir_opcode opcode)
 {
     vkd3d_string_buffer_printf(&compiler->buffer, "%s%s%s", compiler->colours.opcode,
             vsir_opcode_get_name(opcode, "<unknown>"), compiler->colours.reset);
@@ -1545,20 +1518,12 @@ static void shader_dump_icb(struct vkd3d_d3d_asm_compiler *compiler,
     vkd3d_string_buffer_printf(buffer, "}");
 }
 
-static void shader_dump_instruction(struct vkd3d_d3d_asm_compiler *compiler,
-        const struct vkd3d_shader_instruction *ins)
+static void shader_dump_instruction(struct vkd3d_d3d_asm_compiler *compiler, const struct vsir_instruction *ins)
 {
     struct vkd3d_string_buffer *buffer = &compiler->buffer;
     unsigned int i;
 
     compiler->current = ins;
-
-    if (ins->predicate)
-        shader_print_src_operand(compiler, "(", ins->predicate, ") ");
-
-    /* PixWin marks instructions with the coissue flag with a '+' */
-    if (ins->coissue)
-        vkd3d_string_buffer_printf(buffer, "+");
 
     shader_print_opcode(compiler, ins->opcode);
 
@@ -1774,7 +1739,7 @@ static void shader_dump_instruction(struct vkd3d_d3d_asm_compiler *compiler,
                 vkd3d_string_buffer_printf(buffer, ")");
             }
 
-            if (vkd3d_shader_instruction_has_texel_offset(ins))
+            if (vsir_instruction_has_texel_offset(ins))
             {
                 shader_print_int_literal(compiler, "(", ins->texel_offset.u, "");
                 shader_print_int_literal(compiler, ",", ins->texel_offset.v, "");
@@ -2076,10 +2041,10 @@ enum vkd3d_result d3d_asm_compile(struct vsir_program *program, const struct vsi
     {
         .flags = flags,
     };
-    struct vkd3d_shader_instruction *ins;
     enum vkd3d_result result = VKD3D_OK;
     struct vkd3d_string_buffer *buffer;
     struct vsir_program_iterator it;
+    struct vsir_instruction *ins;
     unsigned int indent, i;
     const char *indent_str;
 
@@ -2275,7 +2240,6 @@ static void shader_print_io_declaration(struct vkd3d_string_buffer *buffer, enum
         X(COMBINED_SAMPLER)
         X(CONSTBOOL)
         X(LOOP)
-        X(TEMPFLOAT16)
         X(MISCTYPE)
         X(LABEL)
         X(PREDICATE)
@@ -2295,6 +2259,7 @@ static void shader_print_io_declaration(struct vkd3d_string_buffer *buffer, enum
         X(OUTCONTROLPOINT)
         X(PATCHCONST)
         X(TESSCOORD)
+        X(THIS)
         X(GROUPSHAREDMEM)
         X(THREADID)
         X(THREADGROUPID)
