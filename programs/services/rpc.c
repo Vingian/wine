@@ -565,6 +565,83 @@ static DWORD parse_dependencies(const WCHAR *dependencies, struct service_entry 
     return ERROR_SUCCESS;
 }
 
+static BOOL get_binary_type(LPCWSTR filepath, LPDWORD lpBinaryType)
+{
+    HANDLE hMapping;
+    HANDLE hFile;
+    LPVOID base;
+    PIMAGE_DOS_HEADER pDosHeader;
+    BOOL ret = FALSE;
+
+    hFile = CreateFileW(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE)
+    {
+        if (GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND)
+        {
+            WCHAR maxpath[MAX_PATH];
+            WCHAR *filepart;
+            DWORD results;
+
+            TRACE("Attemptig to find file '%s' \n", debugstr_w(filepath));
+
+            results = SearchPathW(NULL, filepath, NULL, MAX_PATH, maxpath, &filepart);
+            if (results > 0)
+            {
+                hFile = CreateFileW(maxpath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+            }
+        }
+
+        if (hFile == INVALID_HANDLE_VALUE)
+        {
+            return FALSE;
+        }
+    }
+
+    hMapping = CreateFileMappingW(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (!hMapping)
+    {
+        CloseHandle(hFile);
+        return FALSE;
+    }
+
+    base = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
+    if (!base)
+    {
+        CloseHandle(hMapping);
+        CloseHandle(hFile);
+        return FALSE;
+    }
+
+    pDosHeader = (PIMAGE_DOS_HEADER)base;
+    if (pDosHeader->e_magic == IMAGE_DOS_SIGNATURE)
+    {
+        PIMAGE_NT_HEADERS pNtHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)base + pDosHeader->e_lfanew);
+        if (pNtHeader->Signature == IMAGE_NT_SIGNATURE)
+        {
+            switch (pNtHeader->FileHeader.Machine)
+            {
+                case IMAGE_FILE_MACHINE_ARM64:
+                case IMAGE_FILE_MACHINE_AMD64:
+                    *lpBinaryType = SCS_64BIT_BINARY;
+                    ret = TRUE;
+                    break;
+                case IMAGE_FILE_MACHINE_I386:
+                    *lpBinaryType = SCS_32BIT_BINARY;
+                    ret = TRUE;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    UnmapViewOfFile(base);
+    CloseHandle(hMapping);
+    CloseHandle(hFile);
+
+    return ret;
+}
+
 static DWORD create_serviceW(
     SC_RPC_HANDLE hSCManager,
     LPCWSTR lpServiceName,
@@ -613,6 +690,12 @@ static DWORD create_serviceW(
 
     if (lpDisplayName && !*lpDisplayName) lpDisplayName = NULL;
 
+    if (is_wow64)
+    {
+        DWORD type;
+        if (get_binary_type(lpBinaryPathName, &type))
+            is_wow64 = (type == SCS_32BIT_BINARY);
+    }
     entry->is_wow64 = is_wow64;
     entry->config.dwServiceType = entry->status.dwServiceType = dwServiceType;
     entry->config.dwStartType = dwStartType;

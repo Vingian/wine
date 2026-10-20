@@ -766,6 +766,7 @@ enum hlsl_ir_expr_op
     HLSL_OP1_FIND_MSB,
     HLSL_OP1_FLOOR,
     HLSL_OP1_FRACT,
+    HLSL_OP1_ISFINITE,
     HLSL_OP1_ISINF,
     HLSL_OP1_LOG2,
     HLSL_OP1_LOGIC_NOT,
@@ -1657,6 +1658,9 @@ struct hlsl_ir_node *hlsl_block_add_sync(struct hlsl_ctx *ctx, struct hlsl_block
         uint32_t sync_flags, const struct vkd3d_shader_location *loc);
 struct hlsl_ir_node *hlsl_block_add_uint_constant(struct hlsl_ctx *ctx, struct hlsl_block *block,
         unsigned int n, const struct vkd3d_shader_location *loc);
+struct hlsl_ir_node *hlsl_block_add_ternary_expr(struct hlsl_ctx *ctx, struct hlsl_block *block,
+        enum hlsl_ir_expr_op op, struct hlsl_ir_node *arg1, struct hlsl_ir_node *arg2,
+        struct hlsl_ir_node *arg3);
 struct hlsl_ir_node *hlsl_block_add_unary_expr(struct hlsl_ctx *ctx, struct hlsl_block *block,
         enum hlsl_ir_expr_op op, struct hlsl_ir_node *arg, const struct vkd3d_shader_location *loc);
 void hlsl_block_cleanup(struct hlsl_block *block);

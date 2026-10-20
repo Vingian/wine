@@ -3842,6 +3842,22 @@ void d3d12_desc_create_sampler(struct d3d12_desc *sampler,
         return;
     }
 
+    if (TRACE_ON())
+    {
+        TRACE("    filter %s.\n", debug_d3d12_filter(desc->Filter));
+        TRACE("    address {%s, %s, %s}.\n",
+                debug_d3d12_texture_address_mode(desc->AddressU),
+                debug_d3d12_texture_address_mode(desc->AddressV),
+                debug_d3d12_texture_address_mode(desc->AddressW));
+        TRACE("    lod-bias %.8e.\n", desc->MipLODBias);
+        TRACE("    max-anisotropy %u.\n", desc->MaxAnisotropy);
+        TRACE("    comparison %s.\n", debug_d3d12_comparison_func(desc->ComparisonFunc));
+        TRACE("    border-colour {%.8e, %.8e, %.8e, %.8e}.\n",
+                desc->BorderColor[0], desc->BorderColor[1], desc->BorderColor[2], desc->BorderColor[3]);
+        TRACE("    min-lod %.8e.\n", desc->MinLOD);
+        TRACE("    max-lod %.8e.\n", desc->MaxLOD);
+    }
+
     if (desc->AddressU == D3D12_TEXTURE_ADDRESS_MODE_BORDER
             || desc->AddressV == D3D12_TEXTURE_ADDRESS_MODE_BORDER
             || desc->AddressW == D3D12_TEXTURE_ADDRESS_MODE_BORDER)

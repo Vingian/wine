@@ -18,7 +18,8 @@
  */
 
 #include "vkd3d_utils_private.h"
-#include <d3d10.h>
+#include <d3dcommon.h>
+#include <d3d10effect.h>
 #include <d3d10_1shader.h>
 #include <d3d11shader.h>
 #include <d3d12shader.h>
@@ -77,6 +78,7 @@ struct d3d12_reflection
     uint32_t type_conversion_count;
     uint32_t bitwise_count;
     uint32_t sample_frequency;
+    uint32_t interface_slot_count;
 
     struct d3d12_buffer *buffers;
 
@@ -837,9 +839,11 @@ static BOOL STDMETHODCALLTYPE d3d12_reflection_IsSampleFrequencyShader(ID3D12Sha
 
 static UINT STDMETHODCALLTYPE d3d12_reflection_GetNumInterfaceSlots(ID3D12ShaderReflection *iface)
 {
-    FIXME("iface %p stub!\n", iface);
+    struct d3d12_reflection *reflection = impl_from_ID3D12ShaderReflection(iface);
 
-    return 0;
+    TRACE("iface %p.\n", iface);
+
+    return reflection->interface_slot_count;
 }
 
 static HRESULT STDMETHODCALLTYPE d3d12_reflection_GetMinFeatureLevel(
@@ -919,7 +923,7 @@ static HRESULT STDMETHODCALLTYPE d3d10_1reflection_QueryInterface(
 
     if (IsEqualGUID(iid, &IID_ID3D10ShaderReflection1) || IsEqualGUID(iid, &IID_IUnknown))
     {
-        iface->lpVtbl->AddRef(iface);
+        ID3D10ShaderReflection1_AddRef(iface);
         *out = iface;
         return S_OK;
     }
@@ -1575,6 +1579,8 @@ static HRESULT parse_rdef(struct d3d12_reflection *reflection, const struct vkd3
             FIXME("Unexpected field size %#x.\n", rd11->field_size);
             return E_INVALIDARG;
         }
+
+        reflection->interface_slot_count = rd11->interface_slot_count;
     }
 
     reflection->desc.ConstantBuffers = header->buffer_count;
