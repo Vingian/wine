@@ -1,5 +1,7 @@
 /*
- * Copyright 2019 Zhiyi Zhang for CodeWeavers
+ * dxgmms1.sys driver
+ *
+ * Copyright 2017 Michael Müller
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,11 +18,22 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#ifndef __VKD3D_UTF8_H
-#define __VKD3D_UTF8_H
+#include <stdarg.h>
 
-#include "vkd3d_common.h"
+#define NONAMELESSUNION
 
-char *vkd3d_strdup_w_utf8(const WCHAR *wstr, size_t wchar_size);
+#include "ntstatus.h"
+#define WIN32_NO_STATUS
+#include "windef.h"
+#include "winbase.h"
+#include "winternl.h"
+#include "ddk/wdm.h"
+#include "wine/debug.h"
 
-#endif /* __VKD3D_UTF8_H */
+WINE_DEFAULT_DEBUG_CHANNEL(dxgmms1);
+
+NTSTATUS WINAPI DriverEntry( DRIVER_OBJECT *driver, UNICODE_STRING *path )
+{
+    TRACE( "(%p, %s)\n", driver, debugstr_w(path->Buffer) );
+    return STATUS_SUCCESS;
+}
