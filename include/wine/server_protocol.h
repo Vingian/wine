@@ -6257,6 +6257,46 @@ struct alpc_create_port_reply
 };
 
 
+
+struct dcomp_create_shared_visual_request
+{
+    struct request_header __header;
+    char __pad_12[4];
+};
+struct dcomp_create_shared_visual_reply
+{
+    struct reply_header __header;
+    obj_handle_t  handle;
+    char __pad_12[4];
+};
+
+
+
+struct dcomp_set_shared_visual_info_request
+{
+    struct request_header __header;
+    obj_handle_t  handle;
+    client_ptr_t  target_root;
+};
+struct dcomp_set_shared_visual_info_reply
+{
+    struct reply_header __header;
+};
+
+
+
+struct dcomp_get_shared_visual_info_request
+{
+    struct request_header __header;
+    obj_handle_t  handle;
+};
+struct dcomp_get_shared_visual_info_reply
+{
+    struct reply_header __header;
+    client_ptr_t  target_root;
+};
+
+
 enum request
 {
     REQ_new_process,
@@ -6567,6 +6607,9 @@ enum request
     REQ_d3dkmt_sync_wait,
     REQ_d3dkmt_sync_signal,
     REQ_alpc_create_port,
+    REQ_dcomp_create_shared_visual,
+    REQ_dcomp_set_shared_visual_info,
+    REQ_dcomp_get_shared_visual_info,
     REQ_NB_REQUESTS
 };
 
@@ -6882,6 +6925,9 @@ union generic_request
     struct d3dkmt_sync_wait_request d3dkmt_sync_wait_request;
     struct d3dkmt_sync_signal_request d3dkmt_sync_signal_request;
     struct alpc_create_port_request alpc_create_port_request;
+    struct dcomp_create_shared_visual_request dcomp_create_shared_visual_request;
+    struct dcomp_set_shared_visual_info_request dcomp_set_shared_visual_info_request;
+    struct dcomp_get_shared_visual_info_request dcomp_get_shared_visual_info_request;
 };
 union generic_reply
 {
@@ -7195,8 +7241,11 @@ union generic_reply
     struct d3dkmt_sync_wait_reply d3dkmt_sync_wait_reply;
     struct d3dkmt_sync_signal_reply d3dkmt_sync_signal_reply;
     struct alpc_create_port_reply alpc_create_port_reply;
+    struct dcomp_create_shared_visual_reply dcomp_create_shared_visual_reply;
+    struct dcomp_set_shared_visual_info_reply dcomp_set_shared_visual_info_reply;
+    struct dcomp_get_shared_visual_info_reply dcomp_get_shared_visual_info_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 979
+#define SERVER_PROTOCOL_VERSION 980
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */
